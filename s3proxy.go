@@ -18,12 +18,14 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
+var _ caddyfile.Unmarshaler = (*S3Proxy)(nil)
+
 func init() {
 	caddy.RegisterModule(S3Proxy{})
 	httpcaddyfile.RegisterHandlerDirective("s3proxy", parseCaddyfile)
 }
 
-// FileServer implements a static file server responder for Caddy.
+// S3Proxy implements a static file server responder for Caddy.
 type S3Proxy struct {
 	// The prefix to prepend to paths when looking for objects in S3
 	Prefix string `json:"prefix,omitempty"`
@@ -67,45 +69,6 @@ func (S3Proxy) CaddyModule() caddy.ModuleInfo {
 		ID:  "http.handlers.s3proxy",
 		New: func() caddy.Module { return new(S3Proxy) },
 	}
-}
-
-func (b *S3Proxy) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
-	d.NextArg() // skip block beginning: "s3browser"
-
-	for d.NextBlock(0) {
-		var err error
-		switch d.Val() {
-		//case "site_name":
-		//err = parseStringArg(d, &b.SiteName)
-		case "endpoint":
-			err = parseStringArg(d, &b.Endpoint)
-		case "region":
-			err = parseStringArg(d, &b.Region)
-		//case "key":
-		//err = parseStringArg(d, &b.Key)
-		//case "secret":
-		//err = parseStringArg(d, &b.Secret)
-		case "bucket":
-			err = parseStringArg(d, &b.Bucket)
-		//case "secure":
-		//err = parseBoolArg(d, &b.Secure)
-		//case "refresh_interval":
-		//err = parseDurationArg(d, &b.RefreshInterval)
-		//case "refresh_api_secret":
-		//err = parseStringArg(d, &b.RefreshAPISecret)
-		//case "debug":
-		//err = parseBoolArg(d, &b.Debug)
-		//case "signed_url_redirect":
-		//err = parseBoolArg(d, &b.SignedURLRedirect)
-		default:
-			err = d.Errf("not a valid s3browser option")
-		}
-		if err != nil {
-			return d.Errf("Error parsing %s: %s", d.Val(), err)
-		}
-	}
-
-	return nil
 }
 
 func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
