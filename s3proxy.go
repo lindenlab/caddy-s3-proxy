@@ -74,7 +74,7 @@ func (S3Proxy) CaddyModule() caddy.ModuleInfo {
 func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	b.log = ctx.Logger(b)
 
-	b.log.Debug("Initializing S3 Proxy")
+	b.log.Info("Initializing S3 Proxy")
 
 	var config aws.Config
 	if b.Region == "" {
@@ -92,6 +92,7 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 
 	// Create S3 service client
 	b.client = s3.New(sess)
+	b.log.Info("Initializing S3 Proxy done")
 	return nil
 }
 
@@ -101,6 +102,8 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	if fullPath == "" {
 		fullPath = "/"
 	}
+
+	b.log.Info("In ServeHTTP for s3proxy")
 
 	// TODO: what to do amount weird method types
 	// TODO: How to determine if a "dir"
@@ -127,6 +130,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 			return caddyhttp.Error(http.StatusInternalServerError, err)
 		}
 	}
+	b.log.Info("s3proxy: Got Object")
 
 	w.Header().Set("Content-Type", aws.StringValue(obj.ContentType))
 	w.Header().Set("Content-Length", strconv.FormatInt(aws.Int64Value(obj.ContentLength), 10))
