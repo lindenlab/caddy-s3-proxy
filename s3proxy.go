@@ -2,13 +2,12 @@ package caddys3proxy
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
-	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"go.uber.org/zap"
 
@@ -18,11 +17,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-var _ caddyfile.Unmarshaler = (*S3Proxy)(nil)
-
 func init() {
 	caddy.RegisterModule(S3Proxy{})
-	httpcaddyfile.RegisterHandlerDirective("s3proxy", parseCaddyfile)
 }
 
 // S3Proxy implements a static file server responder for Caddy.

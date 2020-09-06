@@ -1,33 +1,38 @@
 package caddys3proxy
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 )
 
-// UnmarshalCaddyfile parses the caddfile block for the s3proxy configs
-func (b *S3Proxy) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
-	d.NextArg() // skip block beginning: "s3proxy"
+func init() {
+	httpcaddyfile.RegisterHandlerDirective("s3proxy", parseCaddyfile)
+}
 
-	for d.NextBlock(0) {
+func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
+	var b S3Proxy
+	fmt.Printf("In Unmarshal")
+
+	h.NextArg() // skip block beginning: "s3proxy"
+	for h.NextBlock(0) {
 		var err error
-		switch d.Val() {
+		switch h.Val() {
 		//case "site_name":
 		//err = parseStringArg(d, &b.SiteName)
 		case "endpoint":
-			err = parseStringArg(d, &b.Endpoint)
+			err = parseStringArg(&h, &b.Endpoint)
 		case "region":
-			err = parseStringArg(d, &b.Region)
+			err = parseStringArg(&h, &b.Region)
 			//case "key":
 			//err = parseStringArg(d, &b.Key)
 			//case "secret":
 			//err = parseStringArg(d, &b.Secret)
 		case "bucket":
-			err = parseStringArg(d, &b.Bucket)
+			err = parseStringArg(&h, &b.Bucket)
 			//case "secure":
 			//err = parseBoolArg(d, &b.Secure)
 			//case "refresh_interval":
@@ -39,26 +44,17 @@ func (b *S3Proxy) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 			//case "signed_url_redirect":
 			//err = parseBoolArg(d, &b.SignedURLRedirect)
 		default:
-			err = d.Errf("%s not a valid s3proxy option", d.Val())
+			err = h.Errf("%s not a valid s3proxy option", h.Val())
 		}
 		if err != nil {
-			return d.Errf("Error parsing %s: %s", d.Val(), err)
+			return nil, h.Errf("Error parsing %s: %s", h.Val(), err)
 		}
 	}
 
-	return nil
+	return b, nil
 }
 
-func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
-	var b S3Proxy
-	err := b.UnmarshalCaddyfile(h.Dispenser)
-	if err != nil {
-		return nil, err
-	}
-	return b, err
-}
-
-func parseBoolArg(d *caddyfile.Dispenser, out *bool) error {
+func parseBoolArg(d *httpcaddyfile.Helper, out *bool) error {
 	var strVal string
 	err := parseStringArg(d, &strVal)
 	if err == nil {
@@ -67,7 +63,7 @@ func parseBoolArg(d *caddyfile.Dispenser, out *bool) error {
 	return err
 }
 
-func parseDurationArg(d *caddyfile.Dispenser, out *time.Duration) error {
+func parseDurationArg(d *httpcaddyfile.Helper, out *time.Duration) error {
 	var strVal string
 	err := parseStringArg(d, &strVal)
 	if err == nil {
@@ -76,7 +72,7 @@ func parseDurationArg(d *caddyfile.Dispenser, out *time.Duration) error {
 	return err
 }
 
-func parseStringArg(d *caddyfile.Dispenser, out *string) error {
+func parseStringArg(d *httpcaddyfile.Helper, out *string) error {
 	if !d.Args(out) {
 		return d.ArgErr()
 	}
