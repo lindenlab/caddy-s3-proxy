@@ -13,6 +13,16 @@ func init() {
 	httpcaddyfile.RegisterHandlerDirective("s3proxy", parseCaddyfile)
 }
 
+// parseCaddyfile parses the s3proxy directive. It enables the proxying
+// requests to S3 and configures it with this syntax:
+//
+//    s3proxy {
+//	      region <aws region>
+//	      bucket <s3 bucket name>
+//	      index  <files...>
+//	      TODO: browse [<template_file>]
+//    }
+//
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
 	var b S3Proxy
 	fmt.Printf("In Unmarshal")
