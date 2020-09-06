@@ -49,6 +49,11 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 			//err = parseBoolArg(d, &b.Debug)
 			//case "signed_url_redirect":
 			//err = parseBoolArg(d, &b.SignedURLRedirect)
+		case "index":
+			b.IndexNames = h.RemainingArgs()
+			if len(b.IndexNames) == 0 {
+				return nil, h.ArgErr()
+			}
 		default:
 			err = h.Errf("%s not a valid s3proxy option", h.Val())
 		}

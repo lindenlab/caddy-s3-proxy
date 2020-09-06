@@ -13,4 +13,19 @@ secure options to provide credentials for accessing S3 without putting the crede
 
 https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html
 
+## Manipulating the path and resulting S3 key
 
+In general, the path passed in to the module is used as the key to get an object from a bucket.  However,
+you may want to serve the S3 data from some other directory in yur web site.  You can do that with the
+uri directive.  For example:
+```
+        route /test-results/* {
+                uri strip_prefix /results
+                s3proxy {
+                        region "us-west-2"
+                        bucket "test-results.tilia-inc.com"
+                }
+        }
+```
+In this example a web request of *http://www.nysite.com/results/myresults.csv* would request a key from the S3 bucket of */myresults.csv*.
+Whereas, if the uri directive was not present it would would request */results/myresults.csv*.

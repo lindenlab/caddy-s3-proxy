@@ -4,7 +4,10 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"path"
 	"strconv"
+	"strings"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
@@ -15,6 +18,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
+
+var defaultIndexNames = []string{"index.html", "index.txt"}
 
 func init() {
 	caddy.RegisterModule(S3Proxy{})
@@ -69,11 +74,19 @@ func (S3Proxy) CaddyModule() caddy.ModuleInfo {
 func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	b.log = ctx.Logger(b)
 
+	if b.IndexNames == nil {
+		b.IndexNames = defaultIndexNames
+	}
+
 	var config aws.Config
-	if b.Region == "" {
+	if b.Region != "" {
+		b.Region = os.Getenv("AWS_REGION")
+	}
+	if b.Region != "" {
 		return errors.New("Region is required to be set")
 	}
 	config.Region = aws.String(b.Region)
+
 	if b.Endpoint != "" {
 		config.Endpoint = aws.String(b.Endpoint)
 	}
@@ -90,6 +103,19 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	return nil
 }
 
+func (b S3Proxy) getS3Object(bucket string, path string) (*s3.GetObjectOutput, error) {
+	oi := s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(path),
+	}
+	b.log.Info("attempting to get",
+		zap.String("bucket", bucket),
+		zap.String("key", path),
+	)
+	obj, err := b.client.GetObject(&oi)
+	return obj, err
+}
+
 func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	// TODO: Handle path manipulation (Root, Prefix, HiddenFiles, etc.)
 	fullPath := r.URL.Path
@@ -99,20 +125,37 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 
 	b.log.Info("In ServeHTTP for s3proxy")
 
+	isDir := strings.HasSuffix(fullPath, "/")
+	var obj *s3.GetObjectOutput
+	var err error
+
+	if isDir && len(b.IndexNames) > 0 {
+		for _, indexPage := range b.IndexNames {
+			indexPath := path.Join(fullPath, indexPage)
+			obj, err = b.getS3Object(b.Bucket, indexPath)
+			if obj != nil {
+				// We found an index!
+				isDir = false
+				break
+			}
+		}
+	}
+
+	// If this is still a dir then browse or throw an error
+	if isDir {
+		// TODO: implement browse
+		err := errors.New("browse not configured")
+		return caddyhttp.Error(http.StatusForbidden, err)
+	}
+
 	// TODO: what to do amount weird method types
 	// TODO: How to determine if a "dir"
 	// TODO: render a "dir" with a template and get a list of objects with stats
 
-	// Hey for now - just serve a freakin path
-	oi := s3.GetObjectInput{
-		Bucket: aws.String(b.Bucket),
-		Key:    aws.String(fullPath),
+	// Get the obj from S3 (skip if we already did when looking for an index)
+	if obj == nil {
+		obj, err = b.getS3Object(b.Bucket, fullPath)
 	}
-	b.log.Info("attempting to get",
-		zap.String("bucket", b.Bucket),
-		zap.String("key", fullPath),
-	)
-	obj, err := b.client.GetObject(&oi)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
