@@ -2,7 +2,6 @@ package caddys3proxy
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -71,7 +70,6 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	b.log = ctx.Logger(b)
 
 	b.log.Info("Initializing S3 Proxy")
-	fmt.Printf("In provision")
 
 	var config aws.Config
 	if b.Region == "" {
@@ -90,7 +88,6 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	// Create S3 service client
 	b.client = s3.New(sess)
 	b.log.Info("Initializing S3 Proxy done")
-	fmt.Printf("Leaving provision")
 	return nil
 }
 
@@ -102,7 +99,6 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	}
 
 	b.log.Info("In ServeHTTP for s3proxy")
-	fmt.Printf("In ServeHTTP")
 
 	// TODO: what to do amount weird method types
 	// TODO: How to determine if a "dir"
