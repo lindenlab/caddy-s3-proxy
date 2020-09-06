@@ -27,15 +27,18 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 			err = parseStringArg(&h, &b.Endpoint)
 		case "region":
 			h.Args(&b.Region)
-			if b.Region == "" {
-				return nil, h.Err("region can not be empty")
-			}
+			// if b.Region == "" {
+			// return nil, h.Err("region can not be empty")
+			//}
 			//case "key":
 			//err = parseStringArg(d, &b.Key)
 			//case "secret":
 			//err = parseStringArg(d, &b.Secret)
 		case "bucket":
-			err = parseStringArg(&h, &b.Bucket)
+			h.Args(&b.Bucket)
+			if b.Bucket == "" {
+				return nil, h.Err("bucket can not be empty")
+			}
 			//case "secure":
 			//err = parseBoolArg(d, &b.Secure)
 			//case "refresh_interval":

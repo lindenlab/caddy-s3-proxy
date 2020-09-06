@@ -69,8 +69,6 @@ func (S3Proxy) CaddyModule() caddy.ModuleInfo {
 func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	b.log = ctx.Logger(b)
 
-	b.log.Info("Initializing S3 Proxy")
-
 	var config aws.Config
 	if b.Region == "" {
 		return errors.New("Region is required to be set")
@@ -87,7 +85,8 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 
 	// Create S3 service client
 	b.client = s3.New(sess)
-	b.log.Info("Initializing S3 Proxy done")
+	b.log.Info("S3 proxy initialized")
+
 	return nil
 }
 
@@ -118,22 +117,36 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
-			case s3.ErrCodeNoSuchKey:
 				// 404
+				b.log.Error("bucket not found",
+					zap.String("bucket", b.Bucket),
+				)
+				return caddyhttp.Error(http.StatusNotFound, nil)
+			case s3.ErrCodeNoSuchKey:
+			case s3.ErrCodeObjectNotInActiveTierError:
+				// 404
+				b.log.Error("key not found",
+					zap.String("key", fullPath),
+				)
 				return caddyhttp.Error(http.StatusNotFound, nil)
 			default:
 				// return 403 maybe?  Why else would it fail?
 				b.log.Error("failed to get object",
+					zap.String("bucket", b.Bucket),
+					zap.String("key", fullPath),
 					zap.String("err", err.Error()),
-					zap.String("aerr", aerr.Error()),
 				)
 				return caddyhttp.Error(http.StatusForbidden, err)
 			}
 		} else {
+			b.log.Error("failed to get object",
+				zap.String("bucket", b.Bucket),
+				zap.String("key", fullPath),
+				zap.String("err", err.Error()),
+			)
 			return caddyhttp.Error(http.StatusInternalServerError, err)
 		}
 	}
-	b.log.Info("s3proxy: Got Object")
 
 	w.Header().Set("Content-Type", aws.StringValue(obj.ContentType))
 	w.Header().Set("Content-Length", strconv.FormatInt(aws.Int64Value(obj.ContentLength), 10))
