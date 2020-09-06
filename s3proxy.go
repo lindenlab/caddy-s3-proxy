@@ -109,6 +109,10 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		Bucket: aws.String(b.Bucket),
 		Key:    aws.String(fullPath),
 	}
+	b.log.Info("attempting to get",
+		zap.String("bucket", b.Bucket),
+		zap.String("key", fullPath),
+	)
 	obj, err := b.client.GetObject(&oi)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {

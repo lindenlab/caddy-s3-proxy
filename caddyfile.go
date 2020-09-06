@@ -26,7 +26,10 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 		case "endpoint":
 			err = parseStringArg(&h, &b.Endpoint)
 		case "region":
-			err = parseStringArg(&h, &b.Region)
+			h.Args(&b.Region)
+			if b.Region == "" {
+				return nil, h.Err("region can not be empty")
+			}
 			//case "key":
 			//err = parseStringArg(d, &b.Key)
 			//case "secret":
