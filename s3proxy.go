@@ -130,6 +130,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	var err error
 
 	if isDir && len(b.IndexNames) > 0 {
+		b.log.Info("isDir and looking for index")
 		for _, indexPage := range b.IndexNames {
 			indexPath := path.Join(fullPath, indexPage)
 			obj, err = b.getS3Object(b.Bucket, indexPath)
