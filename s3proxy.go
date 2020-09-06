@@ -79,13 +79,12 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	}
 
 	var config aws.Config
+
+	// If Region is not specified NewSession will look for it from an env value (AWS_DEFAULT_REGION or AWS_REGION)
+	// TODO: should we check if the env vars are not set so we can give better error message?
 	if b.Region != "" {
-		b.Region = os.Getenv("AWS_REGION")
+		config.Region = aws.String(b.Region)
 	}
-	if b.Region != "" {
-		return errors.New("Region is required to be set")
-	}
-	config.Region = aws.String(b.Region)
 
 	if b.Endpoint != "" {
 		config.Endpoint = aws.String(b.Endpoint)
