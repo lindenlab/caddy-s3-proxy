@@ -119,6 +119,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 				return caddyhttp.Error(http.StatusNotFound, nil)
 			default:
 				// return 403 maybe?  Why else would it fail?
+				b.log.Errorf("err = %w, awserr = %w", err, aerr)
 				return caddyhttp.Error(http.StatusForbidden, err)
 			}
 		} else {
