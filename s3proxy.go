@@ -79,11 +79,8 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 
 	var config aws.Config
 
-	// If Region is not specified NewSession will look for it from an env value (AWS_DEFAULT_REGION or AWS_REGION)
-	// TODO: should we check if the env vars are not set so we can give better error message?
-	b.log.Info("Region: " + b.Region)
+	// If Region is not specified NewSession will look for it from an env value AWS_REGION
 	if b.Region != "" {
-		b.log.Info("setting region")
 		config.Region = aws.String(b.Region)
 	}
 
@@ -192,10 +189,15 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		}
 	}
 
+	b.log.Error("content type",
+		zap.String("value", *obj.ContentType),
+	)
 	w.Header().Set("Content-Type", aws.StringValue(obj.ContentType))
 	w.Header().Set("Content-Length", strconv.FormatInt(aws.Int64Value(obj.ContentLength), 10))
-	if _, err := io.Copy(w, obj.Body); err != nil {
-		return err
+	if *obj.ContentLength != 0 {
+		if _, err := io.Copy(w, obj.Body); err != nil {
+			return err
+		}
 	}
 
 	return nil

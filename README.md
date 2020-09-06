@@ -13,6 +13,23 @@ secure options to provide credentials for accessing S3 without putting the crede
 
 https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html
 
+## Configuration
+The Caddyfile directive would look something like this:
+```
+	s3proxy {
+		bucket <bucket_name>
+		region <region_name>
+		index  <list of index file names>
+	}
+```
+|  option   |  type  |  default   | help |
+|-----------|:------:|------------|------|
+| bucket              | string   |                         | S3 bucket |
+| endpoint            | string   | aws default             | S3 hostname (optional) |
+| region              | string   | env AWS_REGION          | S3 region (optional) |
+| index               | string[] | [index.html, index.txt] | Index files to look up for dir path |
+
+
 ## Manipulating the path and resulting S3 key
 
 In general, the path passed in to the module is used as the key to get an object from a bucket.  However,
