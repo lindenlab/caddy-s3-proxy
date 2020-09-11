@@ -1,0 +1,21 @@
+
+version: '2.1'
+
+services:
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "4566-4599:4566-4599"
+    environment:
+      - SERVICES=s3
+    volumes:
+      - ./awslocal:/docker-entrypoint-initaws.d
+  caddy:
+    image: registry.docker/library/caddy:latest
+    volumes:
+      - ./Caddyfile:/Caddyfile
+    ports:
+      - 80:80
+    links:
+      - localstack
+    command: caddy  run --config /Caddyfile

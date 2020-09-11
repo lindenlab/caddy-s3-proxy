@@ -1,0 +1,13 @@
+
+
+0.0.0.0:80 {
+	log
+        route /* {
+                s3proxy {
+                        region "us-west-2"
+                        bucket "my-bucket"
+			endpoint "localstack:4566"
+                }
+        }
+}
+
