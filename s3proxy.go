@@ -35,6 +35,9 @@ type S3Proxy struct {
 	// The name of the S3 bucket
 	Bucket string `json:"bucket,omitempty"`
 
+	// In insecure is true - disable TLS in the client
+	Insecure string `json:"insecure,omitempty"`
+
 	// Use non-standard endpoint for S3
 	Endpoint string `json:"endpoint,omitempty"`
 
@@ -44,10 +47,6 @@ type S3Proxy struct {
 
 	// The names of files to try as index files if a folder is requested.
 	IndexNames []string `json:"index_names,omitempty"`
-
-	// Enables file listings if a directory was requested and no index
-	// file is present.
-	// Browse *Browse `json:"browse,omitempty"`
 
 	// Use redirects to enforce trailing slashes for directories, or to
 	// remove trailing slash from URIs for files. Default is true.
@@ -88,8 +87,18 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 		config.Endpoint = aws.String(b.Endpoint)
 	}
 
+	if b.Insecure != "" {
+		// insecure, err := strconv.ParseBool(b.Insecure)
+		// if err == nil && insecure == true {
+		//config.DisableSLL = awws.Bool(true)
+		//}
+	}
+
 	sess, err := session.NewSession(&config)
 	if err != nil {
+		b.log.Error("could not create AWS session",
+			zap.String("error", err.Error()),
+		)
 		return err
 	}
 
@@ -175,7 +184,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 				b.log.Error("failed to get object",
 					zap.String("bucket", b.Bucket),
 					zap.String("key", fullPath),
-					zap.String("err", err.Error()),
+					zap.String("err", aerr.Error()),
 				)
 				return caddyhttp.Error(http.StatusForbidden, err)
 			}

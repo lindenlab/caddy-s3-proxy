@@ -6,7 +6,7 @@
                 s3proxy {
                         region "us-west-2"
                         bucket "my-bucket"
-			endpoint "localstack:4566"
+			endpoint "http://localstack:4566/"
                 }
         }
 }
