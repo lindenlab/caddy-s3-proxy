@@ -1,13 +1,26 @@
 
-
-0.0.0.0:80 {
+:80 {
 	log
-        route /* {
+	respond /health-check "OK" 200
+	respond /test "This is working" 200
+
+	# Example using strip prefix
+	route /dev/testing/coverage-reports/* {
+		uri strip_prefix /dev/testing/coverage-reports
+                s3proxy {
+                        region "us-west-2"
+                        bucket "test-results"
+			endpoint "http://localstack:4566/"
+                }
+	}
+
+	route {
                 s3proxy {
                         region "us-west-2"
                         bucket "my-bucket"
+			index index.html
 			endpoint "http://localstack:4566/"
                 }
-        }
+	}
 }
 

@@ -1,8 +1,6 @@
 package caddys3proxy
 
 import (
-	"fmt"
-
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 )
@@ -19,23 +17,17 @@ func init() {
 //	      bucket <s3 bucket name>
 //	      index  <files...>
 //	      endpoint: <alternative endpoint>
-//            insecure: <turn off TLS"
 //    }
 //
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
 	var b S3Proxy
-	fmt.Printf("In Unmarshal")
 
 	h.NextArg() // skip block beginning: "s3proxy"
 	for h.NextBlock(0) {
 		var err error
 		switch h.Val() {
-		//case "site_name":
-		//err = parseStringArg(d, &b.SiteName)
 		case "endpoint":
 			h.Args(&b.Endpoint)
-		case "insecure":
-			h.Args(&b.Insecure)
 		case "region":
 			h.Args(&b.Region)
 		case "bucket":

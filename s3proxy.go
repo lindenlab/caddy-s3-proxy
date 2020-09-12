@@ -34,9 +34,6 @@ type S3Proxy struct {
 	// The name of the S3 bucket
 	Bucket string `json:"bucket,omitempty"`
 
-	// In insecure is true - disable TLS in the client
-	Insecure string `json:"insecure,omitempty"`
-
 	// Use non-standard endpoint for S3
 	Endpoint string `json:"endpoint,omitempty"`
 
@@ -89,13 +86,6 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 
 	if b.Endpoint != "" {
 		config.Endpoint = aws.String(b.Endpoint)
-	}
-
-	if b.Insecure != "" {
-		// insecure, err := strconv.ParseBool(b.Insecure)
-		// if err == nil && insecure == true {
-		//config.DisableSLL = awws.Bool(true)
-		//}
 	}
 
 	sess, err := session.NewSession(&config)
@@ -159,10 +149,6 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		return caddyhttp.Error(http.StatusForbidden, err)
 	}
 
-	// TODO: what to do amount weird method types
-	// TODO: How to determine if a "dir"
-	// TODO: render a "dir" with a template and get a list of objects with stats
-
 	// Get the obj from S3 (skip if we already did when looking for an index)
 	if obj == nil {
 		obj, err = b.getS3Object(b.Bucket, fullPath)
@@ -202,14 +188,10 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		}
 	}
 
-	b.log.Info("content type",
-		zap.String("value", *obj.ContentType),
-	)
 	w.Header().Set("Content-Type", aws.StringValue(obj.ContentType))
 	if obj.ETag != nil {
 		w.Header().Set("ETag", aws.StringValue(obj.ETag))
 	}
-	// 	w.Header().Set("Content-Length", strconv.FormatInt(aws.Int64Value(obj.ContentLength), 10))
 	if obj.Body != nil {
 		w.Header().Del("Content-Length")
 		if _, err := io.Copy(w, obj.Body); err != nil {
