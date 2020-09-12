@@ -25,8 +25,9 @@ func init() {
 
 // S3Proxy implements a static file server responder for Caddy.
 type S3Proxy struct {
-	// The prefix to prepend to paths when looking for objects in S3
-	Prefix string `json:"prefix,omitempty"`
+	// The path to the root of the site. Default is `{http.vars.root}` if set,
+	// Or if not set the value is "" - meaning use the whole path as a key.
+	Root string `json:"root,omitempty"`
 
 	// The AWS region the bucket is hosted in
 	Region string `json:"region,omitempty"`
@@ -67,6 +68,10 @@ func (S3Proxy) CaddyModule() caddy.ModuleInfo {
 
 func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	b.log = ctx.Logger(b)
+
+	if b.Root == "" {
+		b.Root = "{http.vars.root}"
+	}
 
 	if b.IndexNames == nil {
 		b.IndexNames = defaultIndexNames
@@ -117,13 +122,24 @@ func (b S3Proxy) getS3Object(bucket string, path string) (*s3.GetObjectOutput, e
 }
 
 func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	// TODO: Handle path manipulation (Root, Prefix, HiddenFiles, etc.)
-	fullPath := r.URL.Path
+	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
+
+	urlPath := r.URL.Path
+	root := repl.ReplaceAll(b.Root, "")
+	suffix := repl.ReplaceAll(urlPath, "")
+	fullPath := filepath.Join(root, filepath.FromSlash(path.Clean("/"+suffix)))
+
+	b.log.Info("path parts",
+		zap.String("root", root),
+		zap.String("url path", urlPath),
+		zap.String("suffix", suffix),
+		zap.String("fullPath", fullPath),
+	)
 	if fullPath == "" {
 		fullPath = "/"
 	}
 
-	b.log.Info("In ServeHTTP for s3proxy")
+	// TODO: mayebe implement filtering out files (HiddenFiles)
 
 	isDir := strings.HasSuffix(fullPath, "/")
 	var obj *s3.GetObjectOutput

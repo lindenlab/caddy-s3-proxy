@@ -11,7 +11,7 @@ is not configured on your bucket.
 With caddy 2 you can use [xcaddy](https://github.com/caddyserver/xcaddy) to build a version of caddy
 with this plugin installed.  The syntax would look something like this:
 ```
-xcaddy build v2.1.1 \
+xcaddy build \
         --output /usr/local/bin/caddy \
         --with github.com/lindenlab/caddy-s3-proxy 
 ```
