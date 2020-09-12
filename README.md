@@ -26,8 +26,9 @@ The Caddyfile directive would look something like this:
                 endpoint <alternative S3 endpoint>
 	}
 ```
-|  option   |  type  |  required | default   | help |
-|-----------|:------:|------------|------|
+
+|  option   |  type  |  required | default | help |
+|-----------|:------:|-----------|---------|------|
 | bucket              | string   | yes |                          | S3 bucket |
 | endpoint            | string   | no  |  aws default             | S3 hostname |
 | region              | string   | no  |  env AWS_REGION          | S3 region |

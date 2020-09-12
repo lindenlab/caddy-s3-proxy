@@ -78,6 +78,11 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 
 	var config aws.Config
 
+	// This is usually required for localstack and other
+	// S3 alternatives, and I don't think there is any downside
+	// when using it on AWS.  So we will always set it.
+	config.S3ForcePathStyle = aws.Bool(true)
+
 	// If Region is not specified NewSession will look for it from an env value AWS_REGION
 	if b.Region != "" {
 		config.Region = aws.String(b.Region)

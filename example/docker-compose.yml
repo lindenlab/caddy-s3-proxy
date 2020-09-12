@@ -8,6 +8,7 @@ services:
       - "4566-4599:4566-4599"
     environment:
       - SERVICES=s3
+      - DEBUG=1
     volumes:
       - ./awslocal:/docker-entrypoint-initaws.d
   caddy:
@@ -15,7 +16,7 @@ services:
     volumes:
       - ./Caddyfile:/Caddyfile
     ports:
-      - 80:80
+      - "80:80"
     links:
       - localstack
     command: caddy  run --config /Caddyfile
