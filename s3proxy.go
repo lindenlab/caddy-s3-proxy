@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/caddyserver/caddy/v2"
@@ -204,9 +203,12 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	}
 
 	b.log.Info("content type",
-		zap.String("value", obj.String()),
+		zap.String("value", *obj.ContentType),
 	)
 	w.Header().Set("Content-Type", aws.StringValue(obj.ContentType))
+	if obj.ETag != nil {
+		w.Header().Set("ETag", aws.StringValue(obj.ETag))
+	}
 	// 	w.Header().Set("Content-Length", strconv.FormatInt(aws.Int64Value(obj.ContentLength), 10))
 	if obj.Body != nil {
 		w.Header().Del("Content-Length")
