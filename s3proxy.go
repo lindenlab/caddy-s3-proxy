@@ -207,7 +207,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		zap.String("value", obj.String()),
 	)
 	w.Header().Set("Content-Type", aws.StringValue(obj.ContentType))
-	w.Header().Set("Content-Length", strconv.FormatInt(aws.Int64Value(obj.ContentLength), 10))
+	// 	w.Header().Set("Content-Length", strconv.FormatInt(aws.Int64Value(obj.ContentLength), 10))
 	if obj.Body != nil {
 		if _, err := io.Copy(w, obj.Body); err != nil {
 			return err
