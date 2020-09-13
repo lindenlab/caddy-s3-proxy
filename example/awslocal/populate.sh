@@ -15,5 +15,11 @@ echo "resuults for test 1" | awslocal s3 cp - s3://test-results/1/report.txt
 echo "resuults for test 2" | awslocal s3 cp - s3://test-results/2/report.txt
 echo "resuults for test 57" | awslocal s3 cp - s3://test-results/57/report.txt
 echo "resuults for test 784" | awslocal s3 cp - s3://test-results/784/report.txt
+
+awslocal s3 mb s3://bkt
+echo "CAT" | awslocal s3 cp - s3://bkt/a/long/path/we/have/for/animals/cat.txt
+echo "DOG" | awslocal s3 cp - s3://bkt/a/long/path/we/have/for/animals/dog.txt
+echo "COW" | awslocal s3 cp - s3://bkt/a/long/path/we/have/for/animals/cow.txt
+echo "BAT" | awslocal s3 cp - s3://bkt/a/long/path/we/have/for/animals/bat.txt
 set +x
 

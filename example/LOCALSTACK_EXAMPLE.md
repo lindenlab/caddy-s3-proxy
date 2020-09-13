@@ -56,7 +56,7 @@ index.html to display instead.
 BTW, the default values for the index directive are index.html and index.htm
 so the sample use of the index directive here is not even needed.
 
-## Example #2 - Using uri directive
+## Example #2 - Using uri strip_prefix 
 
 Sometimes you do not want all of your sites "path" to be used as a
 key into the bucket.  Here is an example where only the last part of
@@ -78,5 +78,13 @@ return the s3 object with the key of /2/report.txt
 
 Try it out with the following curl:
 ```
-curl /dev/testing/coverage-reports/2/report.txt
+curl localhost/dev/testing/coverage-reports/2/report.txt
 ```
+
+## Example #3 - using the root directive
+
+Also, the first part of your key may also not be something you want in
+your website path.  You can use the root directive to define the "prefix"
+to your S3 key that gets prepended to your path before getting an object
+from S3.
+
