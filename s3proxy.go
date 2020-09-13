@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/caddyserver/caddy/v2"
