@@ -25,14 +25,16 @@ you can play with them by hitting http://localhost.
 
 Here is a basic config for s3proxy:
 ```
-        route {
-                s3proxy {
-                        region "us-west-2"
-                        bucket "my-bucket"
-			index index.html
-                        endpoint "http://localstack:4566/"
-                }
-        }
+{
+        order s3proxy last
+}
+
+s3proxy {
+	region "us-west-2"
+	bucket "my-bucket"
+	index index.html
+	endpoint "http://localstack:4566/"
+}
 ```
 
 With localstack you need to use the endpoint directive.  However, in
@@ -109,5 +111,5 @@ curl localhost/animals/dog.txt
 ```
 
 In this case the website request path of /animals/dog.txt
-Will return the S3 object of /a/long/path/we/have/for/animals/dog.txt
+will return the S3 object of /a/long/path/we/have/for/animals/dog.txt
 

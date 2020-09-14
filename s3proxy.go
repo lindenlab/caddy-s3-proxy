@@ -7,7 +7,6 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -112,12 +111,13 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	return nil
 }
 
-func (b S3Proxy) getS3Object(bucket string, path string) (*s3.GetObjectOutput, error) {
+func (b S3Proxy) getS3Object(bucket string, path string, rangeHeader *string) (*s3.GetObjectOutput, error) {
 	oi := s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(path),
+		Range:  rangeHeader,
 	}
-	b.log.Info("attempting to get",
+	b.log.Info("get from S3",
 		zap.String("bucket", bucket),
 		zap.String("key", path),
 	)
@@ -145,15 +145,20 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 
 	// TODO: mayebe implement filtering out files (HiddenFiles)
 
+	// Check for Range header
+	var rangeHeader *string
+	if rh := r.Header.Get("Range"); rh != "" {
+		rangeHeader = aws.String(rh)
+	}
+
 	isDir := strings.HasSuffix(fullPath, "/")
 	var obj *s3.GetObjectOutput
 	var err error
 
 	if isDir && len(b.IndexNames) > 0 {
-		b.log.Info("isDir and looking for index")
 		for _, indexPage := range b.IndexNames {
 			indexPath := path.Join(fullPath, indexPage)
-			obj, err = b.getS3Object(b.Bucket, indexPath)
+			obj, err = b.getS3Object(b.Bucket, indexPath, rangeHeader)
 			if obj != nil {
 				// We found an index!
 				isDir = false
@@ -171,7 +176,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 
 	// Get the obj from S3 (skip if we already did when looking for an index)
 	if obj == nil {
-		obj, err = b.getS3Object(b.Bucket, fullPath)
+		obj, err = b.getS3Object(b.Bucket, fullPath, rangeHeader)
 	}
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
@@ -231,12 +236,6 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 func setStrHeader(w http.ResponseWriter, key string, value *string) {
 	if value != nil && len(*value) > 0 {
 		w.Header().Add(key, *value)
-	}
-}
-
-func setIntHeader(w http.ResponseWriter, key string, value *int64) {
-	if value != nil && *value > 0 {
-		w.Header().Add(key, strconv.FormatInt(*value, 10))
 	}
 }
 
