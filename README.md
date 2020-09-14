@@ -16,10 +16,12 @@ xcaddy build \
         --with github.com/lindenlab/caddy-s3-proxy 
 ```
 
+You can run ```make docker``` do build a local image you can test with.
+
 ## Configuration
 The Caddyfile directive would look something like this:
 ```
-	s3proxy {
+	s3proxy [<matcher>] {
 		bucket <bucket_name>
 		region <region_name>
 		index  <list of index file names>
@@ -67,3 +69,10 @@ uri directive.  For example:
 ```
 In this example a web request of *http://www.nysite.com/results/myresults.csv* would request a key from the S3 bucket of */myresults.csv*.
 Whereas, if the uri directive was not present it would would request */results/myresults.csv*.
+
+## Examples you can play with
+
+In the examples directory is an example of using the s3proxy with localstack.
+Localstack contains a working version of S3 you can use for local development.
+
+Check out the examples [here](examples/LOCALSTACK_EXAMPLE.md).

@@ -6,7 +6,10 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
@@ -129,16 +132,16 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	root := repl.ReplaceAll(b.Root, "")
 	suffix := repl.ReplaceAll(urlPath, "")
 	fullPath := filepath.Join(root, filepath.FromSlash(path.Clean("/"+suffix)))
+	if fullPath == "" {
+		fullPath = "/"
+	}
 
-	b.log.Info("path parts",
+	b.log.Debug("path parts",
 		zap.String("root", root),
 		zap.String("url path", urlPath),
 		zap.String("suffix", suffix),
 		zap.String("fullPath", fullPath),
 	)
-	if fullPath == "" {
-		fullPath = "/"
-	}
 
 	// TODO: mayebe implement filtering out files (HiddenFiles)
 
@@ -162,7 +165,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	// If this is still a dir then browse or throw an error
 	if isDir {
 		// TODO: implement browse
-		err := errors.New("browse not configured")
+		err := errors.New("can not view a directory")
 		return caddyhttp.Error(http.StatusForbidden, err)
 	}
 
@@ -205,11 +208,17 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		}
 	}
 
-	w.Header().Set("Content-Type", aws.StringValue(obj.ContentType))
-	if obj.ETag != nil {
-		w.Header().Set("ETag", aws.StringValue(obj.ETag))
-	}
+	// Copy heads from AWS response to our response
+	setStrHeader(w, "Content-Disposition", obj.ContentDisposition)
+	setStrHeader(w, "Content-Encoding", obj.ContentEncoding)
+	setStrHeader(w, "Content-Language", obj.ContentLanguage)
+	setStrHeader(w, "Content-Range", obj.ContentRange)
+	setStrHeader(w, "Content-Type", obj.ContentType)
+	setStrHeader(w, "ETag", obj.ETag)
+	setTimeHeader(w, "Last-Modified", obj.LastModified)
+
 	if obj.Body != nil {
+		// io.Copy will set Content-Length
 		w.Header().Del("Content-Length")
 		if _, err := io.Copy(w, obj.Body); err != nil {
 			return err
@@ -217,4 +226,22 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	}
 
 	return nil
+}
+
+func setStrHeader(w http.ResponseWriter, key string, value *string) {
+	if value != nil && len(*value) > 0 {
+		w.Header().Add(key, *value)
+	}
+}
+
+func setIntHeader(w http.ResponseWriter, key string, value *int64) {
+	if value != nil && *value > 0 {
+		w.Header().Add(key, strconv.FormatInt(*value, 10))
+	}
+}
+
+func setTimeHeader(w http.ResponseWriter, key string, value *time.Time) {
+	if value != nil && !reflect.DeepEqual(*value, time.Time{}) {
+		w.Header().Add(key, value.UTC().Format(http.TimeFormat))
+	}
 }

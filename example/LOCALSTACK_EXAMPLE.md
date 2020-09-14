@@ -8,6 +8,9 @@ This dir contains an example of using cadd with the caddy-s3-proxy against local
 
 You need to have docker and docker-compose installed.
 
+First you need a docker image running caddy with the s3proxy installed.
+You can type ```make docker``` to do that.
+
 Then cd into this directory and type:
 ```
 docker-compose up
@@ -87,4 +90,24 @@ Also, the first part of your key may also not be something you want in
 your website path.  You can use the root directive to define the "prefix"
 to your S3 key that gets prepended to your path before getting an object
 from S3.
+
+Here is an example config:
+```
+        route /animals/* {
+                root * /a/long/path/we/have/for
+                s3proxy {
+                        region "us-west-2"
+                        bucket "bkt"
+                        endpoint "http://localstack:4566/"
+                }
+        }
+```
+
+You can try it out like this:
+```
+curl localhost/animals/dog.txt
+```
+
+In this case the website request path of /animals/dog.txt
+Will return the S3 object of /a/long/path/we/have/for/animals/dog.txt
 
