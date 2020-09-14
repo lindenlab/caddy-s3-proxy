@@ -11,28 +11,32 @@ is not configured on your bucket.
 With caddy 2 you can use [xcaddy](https://github.com/caddyserver/xcaddy) to build a version of caddy
 with this plugin installed.  The syntax would look something like this:
 ```
-xcaddy build v2.1.1 \
+xcaddy build \
         --output /usr/local/bin/caddy \
         --with github.com/lindenlab/caddy-s3-proxy 
 ```
 
+You can run ```make docker``` do build a local image you can test with.
+
 ## Configuration
 The Caddyfile directive would look something like this:
 ```
-	s3proxy {
+	s3proxy [<matcher>] {
 		bucket <bucket_name>
 		region <region_name>
 		index  <list of index file names>
                 endpoint <alternative S3 endpoint>
+		root   <key prefix>
 	}
 ```
 
 |  option   |  type  |  required | default | help |
 |-----------|:------:|-----------|---------|------|
-| bucket              | string   | yes |                          | S3 bucket |
+| bucket              | string   | yes |                          | S3 bucket name |
+| region              | string   | no  |  env AWS_REGION          | S3 region - if not give in the Caddyfile then AWS_REGION env var must be set.|
 | endpoint            | string   | no  |  aws default             | S3 hostname |
-| region              | string   | no  |  env AWS_REGION          | S3 region |
 | index               | string[] | no  |  [index.html, index.txt] | Index files to look up for dir path |
+| root                | string   | no  |    | Set a "prefix" to be added to key |
 
 ## Credentials
 
@@ -51,19 +55,9 @@ The methods include (and are looked for in this order):
 For much more detail on the various options for setting AWS credentials see here:
 https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html
 
-## Manipulating the path and resulting S3 key
+## Examples you can play with
 
-In general, the path passed in to the module is used as the key to get an object from a bucket.  However,
-you may want to serve the S3 data from some other directory in yur web site.  You can do that with the
-uri directive.  For example:
-```
-        route /test-results/* {
-                uri strip_prefix /results
-                s3proxy {
-                        region "us-west-2"
-                        bucket "test-results.tilia-inc.com"
-                }
-        }
-```
-In this example a web request of *http://www.nysite.com/results/myresults.csv* would request a key from the S3 bucket of */myresults.csv*.
-Whereas, if the uri directive was not present it would would request */results/myresults.csv*.
+In the examples directory is an example of using the s3proxy with localstack.
+Localstack contains a working version of S3 you can use for local development.
+
+Check out the examples [here](example/LOCALSTACK_EXAMPLE.md).

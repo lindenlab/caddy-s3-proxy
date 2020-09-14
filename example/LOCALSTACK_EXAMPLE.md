@@ -8,6 +8,9 @@ This dir contains an example of using cadd with the caddy-s3-proxy against local
 
 You need to have docker and docker-compose installed.
 
+First you need a docker image running caddy with the s3proxy installed.
+You can type ```make docker``` to do that.
+
 Then cd into this directory and type:
 ```
 docker-compose up
@@ -22,14 +25,16 @@ you can play with them by hitting http://localhost.
 
 Here is a basic config for s3proxy:
 ```
-        route {
-                s3proxy {
-                        region "us-west-2"
-                        bucket "my-bucket"
-			index index.html
-                        endpoint "http://localstack:4566/"
-                }
-        }
+{
+        order s3proxy last
+}
+
+s3proxy {
+	region "us-west-2"
+	bucket "my-bucket"
+	index index.html
+	endpoint "http://localstack:4566/"
+}
 ```
 
 With localstack you need to use the endpoint directive.  However, in
@@ -56,7 +61,7 @@ index.html to display instead.
 BTW, the default values for the index directive are index.html and index.htm
 so the sample use of the index directive here is not even needed.
 
-## Example #2 - Using uri directive
+## Example #2 - Using uri strip_prefix 
 
 Sometimes you do not want all of your sites "path" to be used as a
 key into the bucket.  Here is an example where only the last part of
@@ -78,5 +83,33 @@ return the s3 object with the key of /2/report.txt
 
 Try it out with the following curl:
 ```
-curl /dev/testing/coverage-reports/2/report.txt
+curl localhost/dev/testing/coverage-reports/2/report.txt
 ```
+
+## Example #3 - using the root directive
+
+Also, the first part of your key may also not be something you want in
+your website path.  You can use the root directive to define the "prefix"
+to your S3 key that gets prepended to your path before getting an object
+from S3.
+
+Here is an example config:
+```
+        route /animals/* {
+                root * /a/long/path/we/have/for
+                s3proxy {
+                        region "us-west-2"
+                        bucket "bkt"
+                        endpoint "http://localstack:4566/"
+                }
+        }
+```
+
+You can try it out like this:
+```
+curl localhost/animals/dog.txt
+```
+
+In this case the website request path of /animals/dog.txt
+will return the S3 object of /a/long/path/we/have/for/animals/dog.txt
+

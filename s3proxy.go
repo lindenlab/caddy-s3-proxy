@@ -5,7 +5,10 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"path/filepath"
+	"reflect"
 	"strings"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
@@ -25,8 +28,9 @@ func init() {
 
 // S3Proxy implements a static file server responder for Caddy.
 type S3Proxy struct {
-	// The prefix to prepend to paths when looking for objects in S3
-	Prefix string `json:"prefix,omitempty"`
+	// The path to the root of the site. Default is `{http.vars.root}` if set,
+	// Or if not set the value is "" - meaning use the whole path as a key.
+	Root string `json:"root,omitempty"`
 
 	// The AWS region the bucket is hosted in
 	Region string `json:"region,omitempty"`
@@ -68,6 +72,10 @@ func (S3Proxy) CaddyModule() caddy.ModuleInfo {
 func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	b.log = ctx.Logger(b)
 
+	if b.Root == "" {
+		b.Root = "{http.vars.root}"
+	}
+
 	if b.IndexNames == nil {
 		b.IndexNames = defaultIndexNames
 	}
@@ -103,12 +111,13 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	return nil
 }
 
-func (b S3Proxy) getS3Object(bucket string, path string) (*s3.GetObjectOutput, error) {
+func (b S3Proxy) getS3Object(bucket string, path string, rangeHeader *string) (*s3.GetObjectOutput, error) {
 	oi := s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(path),
+		Range:  rangeHeader,
 	}
-	b.log.Info("attempting to get",
+	b.log.Info("get from S3",
 		zap.String("bucket", bucket),
 		zap.String("key", path),
 	)
@@ -117,23 +126,39 @@ func (b S3Proxy) getS3Object(bucket string, path string) (*s3.GetObjectOutput, e
 }
 
 func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	// TODO: Handle path manipulation (Root, Prefix, HiddenFiles, etc.)
-	fullPath := r.URL.Path
+	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
+
+	urlPath := r.URL.Path
+	root := repl.ReplaceAll(b.Root, "")
+	suffix := repl.ReplaceAll(urlPath, "")
+	fullPath := filepath.Join(root, filepath.FromSlash(path.Clean("/"+suffix)))
 	if fullPath == "" {
 		fullPath = "/"
 	}
 
-	b.log.Info("In ServeHTTP for s3proxy")
+	b.log.Debug("path parts",
+		zap.String("root", root),
+		zap.String("url path", urlPath),
+		zap.String("suffix", suffix),
+		zap.String("fullPath", fullPath),
+	)
+
+	// TODO: mayebe implement filtering out files (HiddenFiles)
+
+	// Check for Range header
+	var rangeHeader *string
+	if rh := r.Header.Get("Range"); rh != "" {
+		rangeHeader = aws.String(rh)
+	}
 
 	isDir := strings.HasSuffix(fullPath, "/")
 	var obj *s3.GetObjectOutput
 	var err error
 
 	if isDir && len(b.IndexNames) > 0 {
-		b.log.Info("isDir and looking for index")
 		for _, indexPage := range b.IndexNames {
 			indexPath := path.Join(fullPath, indexPage)
-			obj, err = b.getS3Object(b.Bucket, indexPath)
+			obj, err = b.getS3Object(b.Bucket, indexPath, rangeHeader)
 			if obj != nil {
 				// We found an index!
 				isDir = false
@@ -145,13 +170,13 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	// If this is still a dir then browse or throw an error
 	if isDir {
 		// TODO: implement browse
-		err := errors.New("browse not configured")
+		err := errors.New("can not view a directory")
 		return caddyhttp.Error(http.StatusForbidden, err)
 	}
 
 	// Get the obj from S3 (skip if we already did when looking for an index)
 	if obj == nil {
-		obj, err = b.getS3Object(b.Bucket, fullPath)
+		obj, err = b.getS3Object(b.Bucket, fullPath, rangeHeader)
 	}
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
@@ -188,11 +213,17 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		}
 	}
 
-	w.Header().Set("Content-Type", aws.StringValue(obj.ContentType))
-	if obj.ETag != nil {
-		w.Header().Set("ETag", aws.StringValue(obj.ETag))
-	}
+	// Copy heads from AWS response to our response
+	setStrHeader(w, "Content-Disposition", obj.ContentDisposition)
+	setStrHeader(w, "Content-Encoding", obj.ContentEncoding)
+	setStrHeader(w, "Content-Language", obj.ContentLanguage)
+	setStrHeader(w, "Content-Range", obj.ContentRange)
+	setStrHeader(w, "Content-Type", obj.ContentType)
+	setStrHeader(w, "ETag", obj.ETag)
+	setTimeHeader(w, "Last-Modified", obj.LastModified)
+
 	if obj.Body != nil {
+		// io.Copy will set Content-Length
 		w.Header().Del("Content-Length")
 		if _, err := io.Copy(w, obj.Body); err != nil {
 			return err
@@ -200,4 +231,16 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	}
 
 	return nil
+}
+
+func setStrHeader(w http.ResponseWriter, key string, value *string) {
+	if value != nil && len(*value) > 0 {
+		w.Header().Add(key, *value)
+	}
+}
+
+func setTimeHeader(w http.ResponseWriter, key string, value *time.Time) {
+	if value != nil && !reflect.DeepEqual(*value, time.Time{}) {
+		w.Header().Add(key, value.UTC().Format(http.TimeFormat))
+	}
 }

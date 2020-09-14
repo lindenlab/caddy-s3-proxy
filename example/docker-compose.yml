@@ -12,7 +12,7 @@ services:
     volumes:
       - ./awslocal:/docker-entrypoint-initaws.d
   caddy:
-    image: registry.docker/library/caddy:latest
+    image: caddy
     volumes:
       - ./Caddyfile:/Caddyfile
     ports:

@@ -1,3 +1,6 @@
+{
+	order s3proxy last
+}
 
 :80 {
 	log
@@ -14,13 +17,25 @@
                 }
 	}
 
-	route {
+	route /animals/* {
+		# It can be useful to have the root and s3proxy
+		# in the same route to limit the scope of the root.
+		# Especially important if also doing a file server.
+		root * /a/long/path/we/have/for
                 s3proxy {
                         region "us-west-2"
-                        bucket "my-bucket"
-			index index.html
+                        bucket "bkt"
 			endpoint "http://localstack:4566/"
                 }
+	}
+
+	# To have the s3prox without the route directive you
+	# need to set the order which we do at the top of this file.
+        s3proxy /* {
+		region "us-west-2"
+		bucket "my-bucket"
+		index index.html
+		endpoint "http://localstack:4566/"
 	}
 }
 
