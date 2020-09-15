@@ -189,8 +189,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 					zap.String("bucket", b.Bucket),
 				)
 				return caddyhttp.Error(http.StatusNotFound, aerr)
-			case s3.ErrCodeNoSuchKey:
-			case s3.ErrCodeObjectNotInActiveTierError:
+			case s3.ErrCodeNoSuchKey, s3.ErrCodeObjectNotInActiveTierError:
 				// 404
 				b.log.Error("key not found",
 					zap.String("key", fullPath),
