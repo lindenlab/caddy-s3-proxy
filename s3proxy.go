@@ -181,19 +181,16 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
-			case s3.ErrCodeNoSuchBucket:
+			case s3.ErrCodeNoSuchBucket,
+				s3.ErrCodeNoSuchKey,
+				s3.ErrCodeObjectNotInActiveTierError:
 				// 404
-				b.log.Error("bucket not found",
+				b.log.Error("not found",
 					zap.String("bucket", b.Bucket),
-				)
-				return caddyhttp.Error(http.StatusNotFound, nil)
-			case s3.ErrCodeNoSuchKey:
-			case s3.ErrCodeObjectNotInActiveTierError:
-				// 404
-				b.log.Error("key not found",
 					zap.String("key", fullPath),
+					zap.String("err", aerr.Error()),
 				)
-				return caddyhttp.Error(http.StatusNotFound, nil)
+				return caddyhttp.Error(http.StatusNotFound, aerr)
 			default:
 				// return 403 maybe?  Why else would it fail?
 				b.log.Error("failed to get object",
