@@ -179,20 +179,16 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		obj, err = b.getS3Object(b.Bucket, fullPath, rangeHeader)
 	}
 	if err != nil {
-		b.log.Info("error not nil")
 		if aerr, ok := err.(awserr.Error); ok {
-			b.log.Info("one")
 			switch aerr.Code() {
-			case s3.ErrCodeNoSuchBucket:
+			case s3.ErrCodeNoSuchBucket,
+				s3.ErrCodeNoSuchKey,
+				s3.ErrCodeObjectNotInActiveTierError:
 				// 404
-				b.log.Error("bucket not found",
+				b.log.Error("not found",
 					zap.String("bucket", b.Bucket),
-				)
-				return caddyhttp.Error(http.StatusNotFound, aerr)
-			case s3.ErrCodeNoSuchKey, s3.ErrCodeObjectNotInActiveTierError:
-				// 404
-				b.log.Error("key not found",
 					zap.String("key", fullPath),
+					zap.String("err", aerr.Error()),
 				)
 				return caddyhttp.Error(http.StatusNotFound, aerr)
 			default:
@@ -205,7 +201,6 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 				return caddyhttp.Error(http.StatusForbidden, err)
 			}
 		} else {
-			b.log.Info("two")
 			b.log.Error("failed to get object",
 				zap.String("bucket", b.Bucket),
 				zap.String("key", fullPath),
@@ -213,7 +208,6 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 			)
 			return caddyhttp.Error(http.StatusInternalServerError, err)
 		}
-		b.log.Info("can not get here")
 	}
 
 	// Copy heads from AWS response to our response
