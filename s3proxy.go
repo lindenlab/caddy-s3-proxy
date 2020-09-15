@@ -177,7 +177,15 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	// Get the obj from S3 (skip if we already did when looking for an index)
 	if obj == nil {
 		obj, err = b.getS3Object(b.Bucket, fullPath, rangeHeader)
+		b.log.Info("did get",
+			zap.String("err", err.Error()),
+			zap.Bool("isNil", obj == nil),
+		)
 	}
+	b.log.Info("check again",
+		zap.String("err", err.Error()),
+		zap.Bool("isNil", obj == nil),
+	)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {

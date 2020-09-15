@@ -7,6 +7,15 @@
 	respond /health-check "OK" 200
 	respond /test "This is working" 200
 
+        route /code-coverage/* {
+                root * /deploy-info/test_assets
+                uri strip_prefix /code-coverage
+                s3proxy {
+                        region "us-west-2"
+                        bucket "ll-build-tilia-production"
+                }
+        }
+
 	# Example using strip prefix
 	route /dev/testing/coverage-reports/* {
 		uri strip_prefix /dev/testing/coverage-reports
