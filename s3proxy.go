@@ -177,31 +177,25 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	// Get the obj from S3 (skip if we already did when looking for an index)
 	if obj == nil {
 		obj, err = b.getS3Object(b.Bucket, fullPath, rangeHeader)
-		b.log.Info("did get",
-			zap.String("err", err.Error()),
-			zap.Bool("isNil", obj == nil),
-		)
 	}
-	b.log.Info("check again",
-		zap.String("err", err.Error()),
-		zap.Bool("isNil", obj == nil),
-	)
 	if err != nil {
+		b.log.Info("error not nil")
 		if aerr, ok := err.(awserr.Error); ok {
+			b.log.Info("one")
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
 				// 404
 				b.log.Error("bucket not found",
 					zap.String("bucket", b.Bucket),
 				)
-				return caddyhttp.Error(http.StatusNotFound, nil)
+				return caddyhttp.Error(http.StatusNotFound, aerr)
 			case s3.ErrCodeNoSuchKey:
 			case s3.ErrCodeObjectNotInActiveTierError:
 				// 404
 				b.log.Error("key not found",
 					zap.String("key", fullPath),
 				)
-				return caddyhttp.Error(http.StatusNotFound, nil)
+				return caddyhttp.Error(http.StatusNotFound, aerr)
 			default:
 				// return 403 maybe?  Why else would it fail?
 				b.log.Error("failed to get object",
@@ -212,6 +206,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 				return caddyhttp.Error(http.StatusForbidden, err)
 			}
 		} else {
+			b.log.Info("two")
 			b.log.Error("failed to get object",
 				zap.String("bucket", b.Bucket),
 				zap.String("key", fullPath),
@@ -219,6 +214,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 			)
 			return caddyhttp.Error(http.StatusInternalServerError, err)
 		}
+		b.log.Info("can not get here")
 	}
 
 	// Copy heads from AWS response to our response
