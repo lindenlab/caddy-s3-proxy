@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -26,7 +25,7 @@ func init() {
 	caddy.RegisterModule(S3Proxy{})
 }
 
-// S3Proxy implements a static file server responder for Caddy.
+// S3Proxy implements a proxy to return objects from S3
 type S3Proxy struct {
 	// The path to the root of the site. Default is `{http.vars.root}` if set,
 	// Or if not set the value is "" - meaning use the whole path as a key.
@@ -41,21 +40,8 @@ type S3Proxy struct {
 	// Use non-standard endpoint for S3
 	Endpoint string `json:"endpoint,omitempty"`
 
-	// A list of files or folders to hide; the file server will pretend as if
-	// they don't exist. Accepts globular patterns like "*.hidden" or "/foo/*/bar".
-	Hide []string `json:"hide,omitempty"`
-
 	// The names of files to try as index files if a folder is requested.
 	IndexNames []string `json:"index_names,omitempty"`
-
-	// Use redirects to enforce trailing slashes for directories, or to
-	// remove trailing slash from URIs for files. Default is true.
-	CanonicalURIs *bool `json:"canonical_uris,omitempty"`
-
-	// If pass-thru mode is enabled and a requested file is not found,
-	// it will invoke the next handler in the chain instead of returning
-	// a 404 error. By default, this is false (disabled).
-	PassThru bool `json:"pass_thru,omitempty"`
 
 	client *s3.S3
 	log    *zap.Logger
@@ -125,21 +111,32 @@ func (b S3Proxy) getS3Object(bucket string, path string, rangeHeader *string) (*
 	return obj, err
 }
 
+func joinPath(root string, uriPath string) string {
+	isDir := uriPath[len(uriPath)-1:] == "/"
+	newPath := path.Join(root, uriPath)
+	if isDir {
+		// Join will strip the ending / which we do not want
+		return newPath + "/"
+	}
+	return newPath
+}
+
 func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
-	urlPath := r.URL.Path
-	root := repl.ReplaceAll(b.Root, "")
-	suffix := repl.ReplaceAll(urlPath, "")
-	fullPath := filepath.Join(root, filepath.FromSlash(path.Clean("/"+suffix)))
-	if fullPath == "" {
-		fullPath = "/"
-	}
+	// urlPath := r.URL.Path
+	// root := repl.ReplaceAll(b.Root, "")
+	// suffix := repl.ReplaceAll(urlPath, "")
+	// fullPath := path.Join(root, filepath.FromSlash(path.Clean("/"+suffix)))
+	// if fullPath == "" {
+	//fullPath = "/"
+	//}
+
+	fullPath := joinPath(repl.ReplaceAll(b.Root, ""), r.URL.Path)
 
 	b.log.Debug("path parts",
-		zap.String("root", root),
-		zap.String("url path", urlPath),
-		zap.String("suffix", suffix),
+		// zap.String("root", root),
+		zap.String("url path", r.URL.Path),
 		zap.String("fullPath", fullPath),
 	)
 
