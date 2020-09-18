@@ -1,6 +1,7 @@
 package caddys3proxy
 
 import (
+	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 )
@@ -21,22 +22,34 @@ func init() {
 //    }
 //
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
+	return parseCaddyfileWithDispenser(h.Dispenser)
+}
+
+func parseCaddyfileWithDispenser(h *caddyfile.Dispenser) (*S3Proxy, error) {
 	var b S3Proxy
 
 	h.NextArg() // skip block beginning: "s3proxy"
+parseLoop:
 	for h.NextBlock(0) {
-		var err error
 		switch h.Val() {
 		case "endpoint":
-			h.Args(&b.Endpoint)
+			if !h.AllArgs(&b.Endpoint) {
+				return nil, h.ArgErr()
+			}
 		case "region":
-			h.Args(&b.Region)
+			if !h.AllArgs(&b.Region) {
+				return nil, h.ArgErr()
+			}
 		case "root":
-			h.Args(&b.Root)
+			if !h.AllArgs(&b.Root) {
+				return nil, h.ArgErr()
+			}
 		case "bucket":
-			h.Args(&b.Bucket)
+			if !h.AllArgs(&b.Bucket) {
+				return nil, h.ArgErr()
+			}
 			if b.Bucket == "" {
-				return nil, h.Err("bucket can not be empty")
+				break parseLoop
 			}
 		case "index":
 			b.IndexNames = h.RemainingArgs()
@@ -44,12 +57,12 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 				return nil, h.ArgErr()
 			}
 		default:
-			err = h.Errf("%s not a valid s3proxy option", h.Val())
-		}
-		if err != nil {
-			return nil, h.Errf("Error parsing %s: %s", h.Val(), err)
+			return nil, h.Errf("%s not a valid s3proxy option", h.Val())
 		}
 	}
+	if b.Bucket == "" {
+		return nil, h.Err("bucket name must be set and not empty")
+	}
 
-	return b, nil
+	return &b, nil
 }

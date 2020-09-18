@@ -9,11 +9,14 @@ is not configured on your bucket.
 ## Making a version of caddy with this plugin
 
 With caddy 2 you can use [xcaddy](https://github.com/caddyserver/xcaddy) to build a version of caddy
-with this plugin installed.  The syntax would look something like this:
+with this plugin installed.  To install xcaddy do:
 ```
-xcaddy build \
-        --output /usr/local/bin/caddy \
-        --with github.com/lindenlab/caddy-s3-proxy 
+go get -u github.com/caddyserver/xcaddy/cmd/xcaddy
+```
+
+This repo has a Makefile to make it easier to build a new version of caddy with this plugin.  Just type:
+```
+make build
 ```
 
 You can run ```make docker``` do build a local image you can test with.
