@@ -114,7 +114,7 @@ func (b S3Proxy) getS3Object(bucket string, path string, rangeHeader *string) (*
 func joinPath(root string, uriPath string) string {
 	isDir := uriPath[len(uriPath)-1:] == "/"
 	newPath := path.Join(root, uriPath)
-	if isDir {
+	if isDir && newPath != "/" {
 		// Join will strip the ending / which we do not want
 		return newPath + "/"
 	}
