@@ -1,8 +1,10 @@
 package caddys3proxy
 
 import (
+	"bytes"
 	"errors"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"path"
 	"reflect"
@@ -115,30 +117,70 @@ func joinPath(root string, uriPath string) string {
 	isDir := uriPath[len(uriPath)-1:] == "/"
 	newPath := path.Join(root, uriPath)
 	if isDir && newPath != "/" {
-		// Join will strip the ending / which we do not want
+		// Join will strip the ending /
+		// add it back if it was there as it implies a dir view
 		return newPath + "/"
 	}
 	return newPath
 }
 
+func makeAwsString(str string) *string {
+	if str == "" {
+		return nil
+	}
+	return aws.String(str)
+}
+
+func (p S3Proxy) HandlePut(w http.ResponseWriter, r *http.Request, key string) error {
+	isDir := strings.HasSuffix(key, "/")
+	if isDir {
+		err := errors.New("method not allowed")
+		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+	}
+
+	// The request gives us r.Body a ReadCloser.  However, Put need a ReadSeeker.
+	// So we need to read the entire object in memory and create the ReadSeeker.
+	// TODO: this will not work well for very large files - will run out of memory
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+
+	oi := s3.PutObjectInput{
+		Bucket:             aws.String(p.Bucket),
+		Key:                aws.String(key),
+		CacheControl:       makeAwsString(r.Header.Get("Cache-Control")),
+		ContentDisposition: makeAwsString(r.Header.Get("Content-Disposition")),
+		ContentEncoding:    makeAwsString(r.Header.Get("Content-Encoding")),
+		ContentLanguage:    makeAwsString(r.Header.Get("Content-Language")),
+		ContentType:        makeAwsString(r.Header.Get("Content-Type")),
+		Body:               bytes.NewReader(buf),
+	}
+	po, err := p.client.PutObject(&oi)
+	if err != nil {
+		return err
+	}
+
+	setStrHeader(w, "ETag", po.ETag)
+
+	return nil
+}
+
 func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
-	// urlPath := r.URL.Path
-	// root := repl.ReplaceAll(b.Root, "")
-	// suffix := repl.ReplaceAll(urlPath, "")
-	// fullPath := path.Join(root, filepath.FromSlash(path.Clean("/"+suffix)))
-	// if fullPath == "" {
-	//fullPath = "/"
-	//}
-
 	fullPath := joinPath(repl.ReplaceAll(b.Root, ""), r.URL.Path)
 
-	b.log.Debug("path parts",
-		// zap.String("root", root),
-		zap.String("url path", r.URL.Path),
-		zap.String("fullPath", fullPath),
-	)
+	switch r.Method {
+	case http.MethodPost:
+		err := errors.New("method not allowed")
+		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+	case http.MethodPut:
+		return b.HandlePut(w, r, fullPath)
+	case http.MethodDelete:
+		err := errors.New("method not allowed")
+		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+	}
 
 	// TODO: mayebe implement filtering out files (HiddenFiles)
 
@@ -207,7 +249,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		}
 	}
 
-	// Copy heads from AWS response to our response
+	// Copy headers from AWS response to our response
 	setStrHeader(w, "Content-Disposition", obj.ContentDisposition)
 	setStrHeader(w, "Content-Encoding", obj.ContentEncoding)
 	setStrHeader(w, "Content-Language", obj.ContentLanguage)

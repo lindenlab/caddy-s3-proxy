@@ -109,9 +109,7 @@ func TestParseCaddyfile(t *testing.T) {
 			}
 			if prox == nil {
 				t.Errorf("Test case '%s' return object was nil", tc.desc)
-			}
-			if prox.Endpoint != tc.obj.Endpoint {
-				t.Errorf("Test case '%s' expected Endpoint of  '%s' but got '%s'", tc.desc, tc.obj.Endpoint, prox.Endpoint)
+				continue
 			}
 			if !reflect.DeepEqual(*prox, tc.obj) {
 				t.Errorf("Test case '%s' expected Endpoint of  '%#v' but got '%#v'", tc.desc, tc.obj, prox)
