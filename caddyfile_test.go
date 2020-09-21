@@ -87,6 +87,30 @@ func TestParseCaddyfile(t *testing.T) {
 				Region:   "myregion",
 			},
 		},
+		testCase{
+			desc: "enable pu",
+			input: `s3proxy {
+				bucket mybucket
+				enable_put
+			}`,
+			shouldErr: false,
+			obj: S3Proxy{
+				Bucket:    "mybucket",
+				EnablePut: true,
+			},
+		},
+		testCase{
+			desc: "enable delete",
+			input: `s3proxy {
+				bucket mybucket
+				enable_delete
+			}`,
+			shouldErr: false,
+			obj: S3Proxy{
+				Bucket:       "mybucket",
+				EnableDelete: true,
+			},
+		},
 	}
 
 	for _, tc := range testCases {

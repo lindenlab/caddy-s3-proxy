@@ -30,6 +30,8 @@ The Caddyfile directive would look something like this:
 		index  <list of index file names>
                 endpoint <alternative S3 endpoint>
 		root   <key prefix>
+		enable_put
+		enable_delete
 	}
 ```
 
@@ -40,6 +42,8 @@ The Caddyfile directive would look something like this:
 | endpoint            | string   | no  |  aws default             | S3 hostname |
 | index               | string[] | no  |  [index.html, index.txt] | Index files to look up for dir path |
 | root                | string   | no  |    | Set a "prefix" to be added to key |
+| enable_put          | bool     | yes | false   | Allow PUT method to be sent through proxy |
+| enable_delete       | bool     | yes | false   | Allow DELETE method to be sent through proxy |
 
 ## Credentials
 
