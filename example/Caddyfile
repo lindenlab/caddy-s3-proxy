@@ -26,6 +26,8 @@
                         region "us-west-2"
                         bucket "bkt"
 			endpoint "http://localstack:4566/"
+			enable_put
+			enable_delete
                 }
 	}
 

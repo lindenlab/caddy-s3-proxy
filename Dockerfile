@@ -1,8 +1,3 @@
-FROM caddy:2-builder AS builder
+FROM debian:buster-slim
 
-RUN caddy-builder \
-    github.com/lindenlab/caddy-s3-proxy
-
-FROM caddy:latest
-
-COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+COPY caddy /usr/bin/caddy

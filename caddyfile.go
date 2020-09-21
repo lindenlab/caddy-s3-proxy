@@ -19,6 +19,8 @@ func init() {
 //	      bucket <s3 bucket name>
 //	      index  <files...>
 //	      endpoint: <alternative endpoint>
+//            enable_put
+//            enable_delete
 //    }
 //
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
@@ -56,6 +58,10 @@ parseLoop:
 			if len(b.IndexNames) == 0 {
 				return nil, h.ArgErr()
 			}
+		case "enable_put":
+			b.EnablePut = true
+		case "enable_delete":
+			b.EnableDelete = true
 		default:
 			return nil, h.Errf("%s not a valid s3proxy option", h.Val())
 		}

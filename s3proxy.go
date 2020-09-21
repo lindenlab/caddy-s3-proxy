@@ -1,8 +1,10 @@
 package caddys3proxy
 
 import (
+	"bytes"
 	"errors"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"path"
 	"reflect"
@@ -43,6 +45,12 @@ type S3Proxy struct {
 	// The names of files to try as index files if a folder is requested.
 	IndexNames []string `json:"index_names,omitempty"`
 
+	// Flag to determine if PUT operations are allowed (default false)
+	EnablePut bool
+
+	// Flag to determine if DELETE operations are allowed (default false)
+	EnableDelete bool
+
 	client *s3.S3
 	log    *zap.Logger
 }
@@ -55,15 +63,15 @@ func (S3Proxy) CaddyModule() caddy.ModuleInfo {
 	}
 }
 
-func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
-	b.log = ctx.Logger(b)
+func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
+	p.log = ctx.Logger(p)
 
-	if b.Root == "" {
-		b.Root = "{http.vars.root}"
+	if p.Root == "" {
+		p.Root = "{http.vars.root}"
 	}
 
-	if b.IndexNames == nil {
-		b.IndexNames = defaultIndexNames
+	if p.IndexNames == nil {
+		p.IndexNames = defaultIndexNames
 	}
 
 	var config aws.Config
@@ -74,25 +82,31 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	config.S3ForcePathStyle = aws.Bool(true)
 
 	// If Region is not specified NewSession will look for it from an env value AWS_REGION
-	if b.Region != "" {
-		config.Region = aws.String(b.Region)
+	if p.Region != "" {
+		config.Region = aws.String(p.Region)
 	}
 
-	if b.Endpoint != "" {
-		config.Endpoint = aws.String(b.Endpoint)
+	if p.Endpoint != "" {
+		config.Endpoint = aws.String(p.Endpoint)
 	}
 
 	sess, err := session.NewSession(&config)
 	if err != nil {
-		b.log.Error("could not create AWS session",
+		p.log.Error("could not create AWS session",
 			zap.String("error", err.Error()),
 		)
 		return err
 	}
 
 	// Create S3 service client
-	b.client = s3.New(sess)
-	b.log.Info("S3 proxy initialized")
+	p.client = s3.New(sess)
+	p.log.Info("S3 proxy initialized for bucket: " + p.Bucket)
+	p.log.Debug("config values",
+		zap.String("endpoint", p.Endpoint),
+		zap.String("region", p.Region),
+		zap.Bool("enable_put", p.EnablePut),
+		zap.Bool("enable_delete", p.EnableDelete),
+	)
 
 	return nil
 }
@@ -115,30 +129,87 @@ func joinPath(root string, uriPath string) string {
 	isDir := uriPath[len(uriPath)-1:] == "/"
 	newPath := path.Join(root, uriPath)
 	if isDir && newPath != "/" {
-		// Join will strip the ending / which we do not want
+		// Join will strip the ending /
+		// add it back if it was there as it implies a dir view
 		return newPath + "/"
 	}
 	return newPath
 }
 
+func makeAwsString(str string) *string {
+	if str == "" {
+		return nil
+	}
+	return aws.String(str)
+}
+
+func (p S3Proxy) HandlePut(w http.ResponseWriter, r *http.Request, key string) error {
+	isDir := strings.HasSuffix(key, "/")
+	if isDir || !p.EnablePut {
+		err := errors.New("method not allowed")
+		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+	}
+
+	// The request gives us r.Body a ReadCloser.  However, Put need a ReadSeeker.
+	// So we need to read the entire object in memory and create the ReadSeeker.
+	// TODO: this will not work well for very large files - will run out of memory
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+
+	oi := s3.PutObjectInput{
+		Bucket:             aws.String(p.Bucket),
+		Key:                aws.String(key),
+		CacheControl:       makeAwsString(r.Header.Get("Cache-Control")),
+		ContentDisposition: makeAwsString(r.Header.Get("Content-Disposition")),
+		ContentEncoding:    makeAwsString(r.Header.Get("Content-Encoding")),
+		ContentLanguage:    makeAwsString(r.Header.Get("Content-Language")),
+		ContentType:        makeAwsString(r.Header.Get("Content-Type")),
+		Body:               bytes.NewReader(buf),
+	}
+	po, err := p.client.PutObject(&oi)
+	if err != nil {
+		return err
+	}
+
+	setStrHeader(w, "ETag", po.ETag)
+
+	return nil
+}
+
+func (p S3Proxy) HandleDelete(w http.ResponseWriter, r *http.Request, key string) error {
+	isDir := strings.HasSuffix(key, "/")
+	if isDir || !p.EnablePut {
+		err := errors.New("method not allowed")
+		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+	}
+
+	di := s3.DeleteObjectInput{
+		Bucket: aws.String(p.Bucket),
+		Key:    aws.String(key),
+	}
+	_, err := p.client.DeleteObject(&di)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
-	// urlPath := r.URL.Path
-	// root := repl.ReplaceAll(b.Root, "")
-	// suffix := repl.ReplaceAll(urlPath, "")
-	// fullPath := path.Join(root, filepath.FromSlash(path.Clean("/"+suffix)))
-	// if fullPath == "" {
-	//fullPath = "/"
-	//}
-
 	fullPath := joinPath(repl.ReplaceAll(b.Root, ""), r.URL.Path)
 
-	b.log.Debug("path parts",
-		// zap.String("root", root),
-		zap.String("url path", r.URL.Path),
-		zap.String("fullPath", fullPath),
-	)
+	switch r.Method {
+	case http.MethodPost:
+		err := errors.New("method not allowed")
+		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+	case http.MethodPut:
+		return b.HandlePut(w, r, fullPath)
+	case http.MethodDelete:
+		return b.HandleDelete(w, r, fullPath)
+	}
 
 	// TODO: mayebe implement filtering out files (HiddenFiles)
 
@@ -207,7 +278,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		}
 	}
 
-	// Copy heads from AWS response to our response
+	// Copy headers from AWS response to our response
 	setStrHeader(w, "Content-Disposition", obj.ContentDisposition)
 	setStrHeader(w, "Content-Encoding", obj.ContentEncoding)
 	setStrHeader(w, "Content-Language", obj.ContentLanguage)

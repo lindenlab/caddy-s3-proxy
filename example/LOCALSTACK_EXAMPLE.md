@@ -101,6 +101,8 @@ Here is an example config:
                         region "us-west-2"
                         bucket "bkt"
                         endpoint "http://localstack:4566/"
+			enable_put
+			enable_delete
                 }
         }
 ```
@@ -113,3 +115,21 @@ curl localhost/animals/dog.txt
 In this case the website request path of /animals/dog.txt
 will return the S3 object of /a/long/path/we/have/for/animals/dog.txt
 
+
+## Example #4 - put and delete operations
+
+It is also possible to send PUT and DELETE operations through the proxy.  Of course,
+you will want to ensure this is locked down with proper authentication!  By default,
+the operations are not allow - but you can turn support for them on with the
+*enable_put* and *enable_delete* directives.
+
+In the above example, these options have been turned on.  You can try it out woth
+some curl commands.  (Be sure to set the Content-Type header when loading data.)
+
+```
+curl -X PUT -d "COW GOES MOO"  -H "Content-Type: text/plain" localhost/animals/cow.txt
+curl localhost/animals/cow.txt
+
+curl -X DELETE  localhost/animals/cow.txt
+curl -i localhost/animals/cow.txt
+```
