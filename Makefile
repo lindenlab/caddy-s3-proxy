@@ -10,6 +10,10 @@ caddy: *.go go.mod Makefile
 docker: caddy  ## build a docker image for caddy with the s3proxy
 	@docker build -t caddy .
 
+.PHONY: test
+test:  ## Run go test on source base
+	@go test --race
+
 .PHONY: lint
 lint:  ## Run golint on source base
 	@golangci-lint run --no-config ./...

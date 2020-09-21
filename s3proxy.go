@@ -45,6 +45,12 @@ type S3Proxy struct {
 	// The names of files to try as index files if a folder is requested.
 	IndexNames []string `json:"index_names,omitempty"`
 
+	// Flag to determine if PUT operations are allowed (default false)
+	EnablePut bool
+
+	// Flag to determine if DELETE operations are allowed (default false)
+	EnableDelete bool
+
 	client *s3.S3
 	log    *zap.Logger
 }
@@ -57,15 +63,15 @@ func (S3Proxy) CaddyModule() caddy.ModuleInfo {
 	}
 }
 
-func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
-	b.log = ctx.Logger(b)
+func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
+	p.log = ctx.Logger(p)
 
-	if b.Root == "" {
-		b.Root = "{http.vars.root}"
+	if p.Root == "" {
+		p.Root = "{http.vars.root}"
 	}
 
-	if b.IndexNames == nil {
-		b.IndexNames = defaultIndexNames
+	if p.IndexNames == nil {
+		p.IndexNames = defaultIndexNames
 	}
 
 	var config aws.Config
@@ -76,25 +82,31 @@ func (b *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	config.S3ForcePathStyle = aws.Bool(true)
 
 	// If Region is not specified NewSession will look for it from an env value AWS_REGION
-	if b.Region != "" {
-		config.Region = aws.String(b.Region)
+	if p.Region != "" {
+		config.Region = aws.String(p.Region)
 	}
 
-	if b.Endpoint != "" {
-		config.Endpoint = aws.String(b.Endpoint)
+	if p.Endpoint != "" {
+		config.Endpoint = aws.String(p.Endpoint)
 	}
 
 	sess, err := session.NewSession(&config)
 	if err != nil {
-		b.log.Error("could not create AWS session",
+		p.log.Error("could not create AWS session",
 			zap.String("error", err.Error()),
 		)
 		return err
 	}
 
 	// Create S3 service client
-	b.client = s3.New(sess)
-	b.log.Info("S3 proxy initialized")
+	p.client = s3.New(sess)
+	p.log.Info("S3 proxy initialized for bucket: " + p.Bucket)
+	p.log.Debug("config values",
+		zap.String("endpoint", p.Endpoint),
+		zap.String("region", p.Region),
+		zap.Bool("enable_put", p.EnablePut),
+		zap.Bool("enable_delete", p.EnableDelete),
+	)
 
 	return nil
 }
@@ -133,7 +145,7 @@ func makeAwsString(str string) *string {
 
 func (p S3Proxy) HandlePut(w http.ResponseWriter, r *http.Request, key string) error {
 	isDir := strings.HasSuffix(key, "/")
-	if isDir {
+	if isDir || !p.EnablePut {
 		err := errors.New("method not allowed")
 		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
 	}
@@ -166,6 +178,24 @@ func (p S3Proxy) HandlePut(w http.ResponseWriter, r *http.Request, key string) e
 	return nil
 }
 
+func (p S3Proxy) HandleDelete(w http.ResponseWriter, r *http.Request, key string) error {
+	isDir := strings.HasSuffix(key, "/")
+	if isDir || !p.EnablePut {
+		err := errors.New("method not allowed")
+		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+	}
+
+	di := s3.DeleteObjectInput{
+		Bucket: aws.String(p.Bucket),
+		Key:    aws.String(key),
+	}
+	_, err := p.client.DeleteObject(&di)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
@@ -178,8 +208,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	case http.MethodPut:
 		return b.HandlePut(w, r, fullPath)
 	case http.MethodDelete:
-		err := errors.New("method not allowed")
-		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+		return b.HandleDelete(w, r, fullPath)
 	}
 
 	// TODO: mayebe implement filtering out files (HiddenFiles)
