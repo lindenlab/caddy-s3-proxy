@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -44,6 +45,9 @@ type S3Proxy struct {
 
 	// The names of files to try as index files if a folder is requested.
 	IndexNames []string `json:"index_names,omitempty"`
+
+	// A glob pattern used to hide matching key paths (returning a 404)
+	Hide []string
 
 	// Flag to determine if PUT operations are allowed (default false)
 	EnablePut bool
@@ -201,6 +205,11 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 
 	fullPath := joinPath(repl.ReplaceAll(b.Root, ""), r.URL.Path)
 
+	// If file is hidden - return 404
+	if fileHidden(fullPath, b.Hide) {
+		return caddyhttp.Error(http.StatusNotFound, nil)
+	}
+
 	switch r.Method {
 	case http.MethodPost:
 		err := errors.New("method not allowed")
@@ -308,4 +317,45 @@ func setTimeHeader(w http.ResponseWriter, key string, value *time.Time) {
 	if value != nil && !reflect.DeepEqual(*value, time.Time{}) {
 		w.Header().Add(key, value.UTC().Format(http.TimeFormat))
 	}
+}
+
+// fileHidden returns true if filename is hidden
+// according to the hide list.
+func fileHidden(filename string, hide []string) bool {
+	sep := string(filepath.Separator)
+	var components []string
+
+	for _, h := range hide {
+		if !strings.Contains(h, sep) {
+			// if there is no separator in h, then we assume the user
+			// wants to hide any files or folders that match that
+			// name; thus we have to compare against each component
+			// of the filename, e.g. hiding "bar" would hide "/bar"
+			// as well as "/foo/bar/baz" but not "/barstool".
+			if len(components) == 0 {
+				components = strings.Split(filename, sep)
+			}
+			for _, c := range components {
+				if c == h {
+					return true
+				}
+			}
+		} else if strings.HasPrefix(filename, h) {
+			// otherwise, if there is a separator in h, and
+			// filename is exactly prefixed with h, then we
+			// can do a prefix match so that "/foo" matches
+			// "/foo/bar" but not "/foobar".
+			withoutPrefix := strings.TrimPrefix(filename, h)
+			if strings.HasPrefix(withoutPrefix, sep) {
+				return true
+			}
+		}
+
+		// in the general case, a glob match will suffice
+		if hidden, _ := filepath.Match(h, filename); hidden {
+			return true
+		}
+	}
+
+	return false
 }
