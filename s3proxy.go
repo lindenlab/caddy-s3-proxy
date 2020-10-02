@@ -115,17 +115,17 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	return nil
 }
 
-func (b S3Proxy) getS3Object(bucket string, path string, rangeHeader *string) (*s3.GetObjectOutput, error) {
+func (p S3Proxy) getS3Object(bucket string, path string, rangeHeader *string) (*s3.GetObjectOutput, error) {
 	oi := s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(path),
 		Range:  rangeHeader,
 	}
-	b.log.Info("get from S3",
+	p.log.Info("get from S3",
 		zap.String("bucket", bucket),
 		zap.String("key", path),
 	)
-	obj, err := b.client.GetObject(&oi)
+	obj, err := p.client.GetObject(&oi)
 	return obj, err
 }
 
@@ -200,13 +200,13 @@ func (p S3Proxy) HandleDelete(w http.ResponseWriter, r *http.Request, key string
 
 	return nil
 }
-func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
-	fullPath := joinPath(repl.ReplaceAll(b.Root, ""), r.URL.Path)
+	fullPath := joinPath(repl.ReplaceAll(p.Root, ""), r.URL.Path)
 
 	// If file is hidden - return 404
-	if fileHidden(fullPath, b.Hide) {
+	if fileHidden(fullPath, p.Hide) {
 		return caddyhttp.Error(http.StatusNotFound, nil)
 	}
 
@@ -215,9 +215,9 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		err := errors.New("method not allowed")
 		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
 	case http.MethodPut:
-		return b.HandlePut(w, r, fullPath)
+		return p.HandlePut(w, r, fullPath)
 	case http.MethodDelete:
-		return b.HandleDelete(w, r, fullPath)
+		return p.HandleDelete(w, r, fullPath)
 	}
 
 	// TODO: mayebe implement filtering out files (HiddenFiles)
@@ -232,10 +232,10 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	var obj *s3.GetObjectOutput
 	var err error
 
-	if isDir && len(b.IndexNames) > 0 {
-		for _, indexPage := range b.IndexNames {
+	if isDir && len(p.IndexNames) > 0 {
+		for _, indexPage := range p.IndexNames {
 			indexPath := path.Join(fullPath, indexPage)
-			obj, err = b.getS3Object(b.Bucket, indexPath, rangeHeader)
+			obj, err = p.getS3Object(p.Bucket, indexPath, rangeHeader)
 			if obj != nil {
 				// We found an index!
 				isDir = false
@@ -253,7 +253,7 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 
 	// Get the obj from S3 (skip if we already did when looking for an index)
 	if obj == nil {
-		obj, err = b.getS3Object(b.Bucket, fullPath, rangeHeader)
+		obj, err = p.getS3Object(p.Bucket, fullPath, rangeHeader)
 	}
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
@@ -262,24 +262,24 @@ func (b S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 				s3.ErrCodeNoSuchKey,
 				s3.ErrCodeObjectNotInActiveTierError:
 				// 404
-				b.log.Error("not found",
-					zap.String("bucket", b.Bucket),
+				p.log.Debug("not found",
+					zap.String("bucket", p.Bucket),
 					zap.String("key", fullPath),
 					zap.String("err", aerr.Error()),
 				)
 				return caddyhttp.Error(http.StatusNotFound, aerr)
 			default:
 				// return 403 maybe?  Why else would it fail?
-				b.log.Error("failed to get object",
-					zap.String("bucket", b.Bucket),
+				p.log.Error("failed to get object",
+					zap.String("bucket", p.Bucket),
 					zap.String("key", fullPath),
 					zap.String("err", aerr.Error()),
 				)
 				return caddyhttp.Error(http.StatusForbidden, err)
 			}
 		} else {
-			b.log.Error("failed to get object",
-				zap.String("bucket", b.Bucket),
+			p.log.Error("failed to get object",
+				zap.String("bucket", p.Bucket),
 				zap.String("key", fullPath),
 				zap.String("err", err.Error()),
 			)
