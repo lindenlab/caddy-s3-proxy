@@ -18,6 +18,7 @@ func init() {
 //	      region <aws region>
 //	      bucket <s3 bucket name>
 //	      index  <files...>
+//	      hide   <file patterns...>
 //	      endpoint: <alternative endpoint>
 //            enable_put
 //            enable_delete
@@ -44,6 +45,11 @@ parseLoop:
 			}
 		case "root":
 			if !h.AllArgs(&b.Root) {
+				return nil, h.ArgErr()
+			}
+		case "hide":
+			b.Hide = h.RemainingArgs()
+			if len(b.Hide) == 0 {
 				return nil, h.ArgErr()
 			}
 		case "bucket":
