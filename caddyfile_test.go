@@ -111,6 +111,18 @@ func TestParseCaddyfile(t *testing.T) {
 				EnableDelete: true,
 			},
 		},
+		testCase{
+			desc: "enable not_found_key",
+			input: `s3proxy {
+				bucket mybucket
+				not_found_key "path/to/404.html"
+			}`,
+			shouldErr: false,
+			obj: S3Proxy{
+				Bucket:      "mybucket",
+				NotFoundKey: "path/to/404.html",
+			},
+		},
 	}
 
 	for _, tc := range testCases {

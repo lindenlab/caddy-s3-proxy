@@ -14,14 +14,15 @@ func init() {
 // requests to S3 and configures it with this syntax:
 //
 //    s3proxy [<matcher>] {
-//            root   <path to prefix S3 key with>
-//	      region <aws region>
-//	      bucket <s3 bucket name>
-//	      index  <files...>
-//	      hide   <file patterns...>
-//	      endpoint: <alternative endpoint>
-//            enable_put
-//            enable_delete
+//        root   <path to prefix S3 key with>
+//        region <aws region>
+//        bucket <s3 bucket name>
+//        index  <files...>
+//        hide   <file patterns...>
+//        endpoint: <alternative endpoint>
+//        not_found_key <S3 key to a 404 page>
+//        enable_put
+//        enable_delete
 //    }
 //
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
@@ -68,6 +69,10 @@ parseLoop:
 			b.EnablePut = true
 		case "enable_delete":
 			b.EnableDelete = true
+		case "not_found_key":
+			if !h.AllArgs(&b.NotFoundKey) {
+				return nil, h.ArgErr()
+			}
 		default:
 			return nil, h.Errf("%s not a valid s3proxy option", h.Val())
 		}
