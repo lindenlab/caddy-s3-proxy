@@ -61,6 +61,11 @@ type S3Proxy struct {
 	// Flag to determine if DELETE operations are allowed (default false)
 	EnableDelete bool
 
+	// Key that should exist in the bucket and that the proxy will fallback to
+	// if the requested path doesn't exist in the bucket. This is especially
+	// useful to make custom 404 error pages.
+	NotFoundKey string `json:"not_found_key,omitempty"`
+
 	client *s3.S3
 	log    *zap.Logger
 }
@@ -228,6 +233,48 @@ func (p S3Proxy) HandleDelete(w http.ResponseWriter, r *http.Request, key string
 
 	return nil
 }
+
+func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetObjectOutput) error {
+	// Copy headers from AWS response to our response
+	setStrHeader(w, "Content-Disposition", obj.ContentDisposition)
+	setStrHeader(w, "Content-Encoding", obj.ContentEncoding)
+	setStrHeader(w, "Content-Language", obj.ContentLanguage)
+	setStrHeader(w, "Content-Range", obj.ContentRange)
+	setStrHeader(w, "Content-Type", obj.ContentType)
+	setStrHeader(w, "ETag", obj.ETag)
+	setTimeHeader(w, "Last-Modified", obj.LastModified)
+
+	var err error
+	if obj.Body != nil {
+		// io.Copy will set Content-Length
+		w.Header().Del("Content-Length")
+		_, err = io.Copy(w, obj.Body)
+	}
+
+	return err
+}
+
+func (p S3Proxy) serve404(w http.ResponseWriter, parentError error) error {
+	notFoundKey := p.NotFoundKey
+
+	w.WriteHeader(http.StatusNotFound)
+
+	if notFoundKey == "" {
+		return caddyhttp.Error(http.StatusNotFound, parentError)
+	}
+
+	obj, err := p.getS3Object(p.Bucket, notFoundKey, nil)
+	if err != nil {
+		return caddyhttp.Error(http.StatusNotFound, err)
+	}
+
+	if err := p.writeResponseFromGetObject(w, obj); err != nil {
+		return caddyhttp.Error(http.StatusNotFound, err)
+	}
+
+	return caddyhttp.Error(http.StatusNotFound, parentError)
+}
+
 func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
@@ -235,7 +282,7 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 
 	// If file is hidden - return 404
 	if fileHidden(fullPath, p.Hide) {
-		return caddyhttp.Error(http.StatusNotFound, nil)
+		return p.serve404(w, nil)
 	}
 
 	switch r.Method {
@@ -289,7 +336,7 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 					zap.String("key", fullPath),
 					zap.String("err", aerr.Error()),
 				)
-				return caddyhttp.Error(http.StatusNotFound, aerr)
+				return p.serve404(w, aerr)
 			default:
 				if code, ok := awsErrorCodesMapping[aerr.Code()]; ok {
 					return caddyhttp.Error(code, nil)
@@ -313,24 +360,7 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		}
 	}
 
-	// Copy headers from AWS response to our response
-	setStrHeader(w, "Content-Disposition", obj.ContentDisposition)
-	setStrHeader(w, "Content-Encoding", obj.ContentEncoding)
-	setStrHeader(w, "Content-Language", obj.ContentLanguage)
-	setStrHeader(w, "Content-Range", obj.ContentRange)
-	setStrHeader(w, "Content-Type", obj.ContentType)
-	setStrHeader(w, "ETag", obj.ETag)
-	setTimeHeader(w, "Last-Modified", obj.LastModified)
-
-	if obj.Body != nil {
-		// io.Copy will set Content-Length
-		w.Header().Del("Content-Length")
-		if _, err := io.Copy(w, obj.Body); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return p.writeResponseFromGetObject(w, obj)
 }
 
 func setStrHeader(w http.ResponseWriter, key string, value *string) {
