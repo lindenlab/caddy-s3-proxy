@@ -24,6 +24,12 @@ import (
 
 var defaultIndexNames = []string{"index.html", "index.txt"}
 
+var awsErrorCodesMapping = map[string]int{
+	"NotModified":        http.StatusNotModified,
+	"PreconditionFailed": http.StatusPreconditionFailed,
+	"InvalidRange":       http.StatusRequestedRangeNotSatisfiable,
+}
+
 func init() {
 	caddy.RegisterModule(S3Proxy{})
 }
@@ -115,18 +121,40 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	return nil
 }
 
-func (p S3Proxy) getS3Object(bucket string, path string, rangeHeader *string) (*s3.GetObjectOutput, error) {
-	oi := s3.GetObjectInput{
+func (p S3Proxy) getS3Object(bucket string, path string, headers http.Header) (*s3.GetObjectOutput, error) {
+	oi := &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(path),
-		Range:  rangeHeader,
 	}
+
+	if rg := headers.Get("Range"); rg != "" {
+		oi = oi.SetRange(rg)
+	}
+	if ifMatch := headers.Get("If-Match"); ifMatch != "" {
+		oi = oi.SetIfMatch(ifMatch)
+	}
+	if ifNoneMatch := headers.Get("If-None-Match"); ifNoneMatch != "" {
+		oi = oi.SetIfNoneMatch(ifNoneMatch)
+	}
+	if ifModifiedSince := headers.Get("If-Modified-Since"); ifModifiedSince != "" {
+		t, err := time.Parse(http.TimeFormat, ifModifiedSince)
+		if err == nil {
+			oi = oi.SetIfModifiedSince(t)
+		}
+	}
+	if ifUnmodifiedSince := headers.Get("If-Unmodified-Since"); ifUnmodifiedSince != "" {
+		t, err := time.Parse(http.TimeFormat, ifUnmodifiedSince)
+		if err == nil {
+			oi = oi.SetIfUnmodifiedSince(t)
+		}
+	}
+
 	p.log.Info("get from S3",
 		zap.String("bucket", bucket),
 		zap.String("key", path),
 	)
-	obj, err := p.client.GetObject(&oi)
-	return obj, err
+
+	return p.client.GetObject(oi)
 }
 
 func joinPath(root string, uriPath string) string {
@@ -222,12 +250,6 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 
 	// TODO: mayebe implement filtering out files (HiddenFiles)
 
-	// Check for Range header
-	var rangeHeader *string
-	if rh := r.Header.Get("Range"); rh != "" {
-		rangeHeader = aws.String(rh)
-	}
-
 	isDir := strings.HasSuffix(fullPath, "/")
 	var obj *s3.GetObjectOutput
 	var err error
@@ -235,7 +257,7 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	if isDir && len(p.IndexNames) > 0 {
 		for _, indexPage := range p.IndexNames {
 			indexPath := path.Join(fullPath, indexPage)
-			obj, err = p.getS3Object(p.Bucket, indexPath, rangeHeader)
+			obj, err = p.getS3Object(p.Bucket, indexPath, r.Header)
 			if obj != nil {
 				// We found an index!
 				isDir = false
@@ -253,7 +275,7 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 
 	// Get the obj from S3 (skip if we already did when looking for an index)
 	if obj == nil {
-		obj, err = p.getS3Object(p.Bucket, fullPath, rangeHeader)
+		obj, err = p.getS3Object(p.Bucket, fullPath, r.Header)
 	}
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
@@ -269,6 +291,10 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 				)
 				return caddyhttp.Error(http.StatusNotFound, aerr)
 			default:
+				if code, ok := awsErrorCodesMapping[aerr.Code()]; ok {
+					return caddyhttp.Error(code, nil)
+				}
+
 				// return 403 maybe?  Why else would it fail?
 				p.log.Error("failed to get object",
 					zap.String("bucket", p.Bucket),
