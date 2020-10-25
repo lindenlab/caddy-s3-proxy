@@ -126,6 +126,21 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	return nil
 }
 
+func (p S3Proxy) wrapCaddyError(w http.ResponseWriter, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	caddyErr, isCaddyErr := err.(caddyhttp.HandlerError)
+	if isCaddyErr && caddyErr.StatusCode != 0 {
+		w.WriteHeader(caddyErr.StatusCode)
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	return err
+}
+
 func (p S3Proxy) getS3Object(bucket string, path string, headers http.Header) (*s3.GetObjectOutput, error) {
 	oi := &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
@@ -217,7 +232,7 @@ func (p S3Proxy) HandlePut(w http.ResponseWriter, r *http.Request, key string) e
 
 func (p S3Proxy) HandleDelete(w http.ResponseWriter, r *http.Request, key string) error {
 	isDir := strings.HasSuffix(key, "/")
-	if isDir || !p.EnablePut {
+	if isDir || !p.EnableDelete {
 		err := errors.New("method not allowed")
 		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
 	}
@@ -257,8 +272,6 @@ func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetOb
 func (p S3Proxy) serve404(w http.ResponseWriter, parentError error) error {
 	notFoundKey := p.NotFoundKey
 
-	w.WriteHeader(http.StatusNotFound)
-
 	if notFoundKey == "" {
 		return caddyhttp.Error(http.StatusNotFound, parentError)
 	}
@@ -268,6 +281,8 @@ func (p S3Proxy) serve404(w http.ResponseWriter, parentError error) error {
 		return caddyhttp.Error(http.StatusNotFound, err)
 	}
 
+	w.WriteHeader(http.StatusNotFound)
+
 	if err := p.writeResponseFromGetObject(w, obj); err != nil {
 		return caddyhttp.Error(http.StatusNotFound, err)
 	}
@@ -275,7 +290,7 @@ func (p S3Proxy) serve404(w http.ResponseWriter, parentError error) error {
 	return caddyhttp.Error(http.StatusNotFound, parentError)
 }
 
-func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
 	fullPath := joinPath(repl.ReplaceAll(p.Root, ""), r.URL.Path)
@@ -286,13 +301,15 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	}
 
 	switch r.Method {
-	case http.MethodPost:
-		err := errors.New("method not allowed")
-		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+	case http.MethodGet:
+		break
 	case http.MethodPut:
 		return p.HandlePut(w, r, fullPath)
 	case http.MethodDelete:
 		return p.HandleDelete(w, r, fullPath)
+	default:
+		err := errors.New("method not allowed")
+		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
 	}
 
 	// TODO: mayebe implement filtering out files (HiddenFiles)
@@ -348,6 +365,7 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 					zap.String("key", fullPath),
 					zap.String("err", aerr.Error()),
 				)
+
 				return caddyhttp.Error(http.StatusForbidden, err)
 			}
 		} else {
@@ -356,11 +374,16 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 				zap.String("key", fullPath),
 				zap.String("err", err.Error()),
 			)
+
 			return caddyhttp.Error(http.StatusInternalServerError, err)
 		}
 	}
 
 	return p.writeResponseFromGetObject(w, obj)
+}
+
+func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+	return p.wrapCaddyError(w, p.doServeHTTP(w, r, next))
 }
 
 func setStrHeader(w http.ResponseWriter, key string, value *string) {
