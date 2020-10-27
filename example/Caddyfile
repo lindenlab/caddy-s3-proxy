@@ -1,5 +1,6 @@
 {
 	order s3proxy last
+	debug
 }
 
 :80 {
@@ -28,6 +29,7 @@
 			endpoint "http://localstack:4566/"
 			enable_put
 			enable_delete
+			browse
                 }
 	}
 

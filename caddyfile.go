@@ -22,6 +22,7 @@ func init() {
 //	      endpoint: <alternative endpoint>
 //            enable_put
 //            enable_delete
+//	      browse
 //    }
 //
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
@@ -68,6 +69,8 @@ parseLoop:
 			b.EnablePut = true
 		case "enable_delete":
 			b.EnableDelete = true
+		case "browse":
+			b.EnableBrowse = true
 		default:
 			return nil, h.Errf("%s not a valid s3proxy option", h.Val())
 		}

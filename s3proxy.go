@@ -3,6 +3,7 @@ package caddys3proxy
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -54,6 +55,9 @@ type S3Proxy struct {
 
 	// Flag to determine if DELETE operations are allowed (default false)
 	EnableDelete bool
+
+	// Flag to enable browsing of "directories" in S3 (paths that end with a /)
+	EnableBrowse bool
 
 	client *s3.S3
 	log    *zap.Logger
@@ -147,7 +151,7 @@ func makeAwsString(str string) *string {
 	return aws.String(str)
 }
 
-func (p S3Proxy) HandlePut(w http.ResponseWriter, r *http.Request, key string) error {
+func (p S3Proxy) PutHandler(w http.ResponseWriter, r *http.Request, key string) error {
 	isDir := strings.HasSuffix(key, "/")
 	if isDir || !p.EnablePut {
 		err := errors.New("method not allowed")
@@ -182,7 +186,7 @@ func (p S3Proxy) HandlePut(w http.ResponseWriter, r *http.Request, key string) e
 	return nil
 }
 
-func (p S3Proxy) HandleDelete(w http.ResponseWriter, r *http.Request, key string) error {
+func (p S3Proxy) DeleteHandler(w http.ResponseWriter, r *http.Request, key string) error {
 	isDir := strings.HasSuffix(key, "/")
 	if isDir || !p.EnablePut {
 		err := errors.New("method not allowed")
@@ -200,6 +204,69 @@ func (p S3Proxy) HandleDelete(w http.ResponseWriter, r *http.Request, key string
 
 	return nil
 }
+
+func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, path string) error {
+
+	// We should only get here if the path ends in a /, however, when we make the
+	//call to ListObjects no / should be there
+	prefix := strings.TrimPrefix(path, "/")
+
+	input := s3.ListObjectsV2Input{
+		Bucket: aws.String(p.Bucket),
+		// ContinuationToken: TODO
+		// StartAfter: TODO - but I don't think I should use this
+		Prefix: aws.String(prefix), // TODO: do I need to remove the trailing slash?
+		// MaxKeys: TODO
+		Delimiter: aws.String("/"),
+	}
+
+	result, err := p.client.ListObjectsV2(&input)
+	if err != nil {
+		p.log.Debug("error in ListObjectsV2",
+			zap.String("bucket", p.Bucket),
+			zap.String("path", path),
+			zap.String("err", err.Error()),
+		)
+		// TODO: map aws errors to caddy errors
+		return caddyhttp.Error(http.StatusNotFound, nil)
+	}
+
+	items := Items{}
+	items.Count = *result.KeyCount
+	if result.NextContinuationToken != nil {
+		items.NextToken = *result.NextContinuationToken
+	}
+	for _, dir := range result.CommonPrefixes {
+		items.Items = append(items.Items, Item{
+			Name:  *dir.Prefix,
+			IsDir: true,
+		})
+	}
+	for _, obj := range result.Contents {
+		items.Items = append(items.Items, Item{
+			Name:         *obj.Key,
+			Key:          *obj.Key,
+			Size:         *obj.Size,
+			LastModified: *obj.LastModified,
+			IsDir:        false,
+		})
+	}
+
+	if r.Header.Get("Content-type") == "application/json" {
+		// Give JSON output of dir
+		output := items.GenerateJson()
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		fmt.Fprintln(w, output)
+	} else {
+		// Generate html response of dir
+		output := items.GenerateHtml()
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintln(w, output)
+	}
+
+	return nil
+}
+
 func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
@@ -215,12 +282,10 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		err := errors.New("method not allowed")
 		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
 	case http.MethodPut:
-		return p.HandlePut(w, r, fullPath)
+		return p.PutHandler(w, r, fullPath)
 	case http.MethodDelete:
-		return p.HandleDelete(w, r, fullPath)
+		return p.DeleteHandler(w, r, fullPath)
 	}
-
-	// TODO: mayebe implement filtering out files (HiddenFiles)
 
 	// Check for Range header
 	var rangeHeader *string
@@ -236,7 +301,7 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		for _, indexPage := range p.IndexNames {
 			indexPath := path.Join(fullPath, indexPage)
 			obj, err = p.getS3Object(p.Bucket, indexPath, rangeHeader)
-			if obj != nil {
+			if err == nil {
 				// We found an index!
 				isDir = false
 				break
@@ -246,9 +311,13 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 
 	// If this is still a dir then browse or throw an error
 	if isDir {
-		// TODO: implement browse
-		err := errors.New("can not view a directory")
-		return caddyhttp.Error(http.StatusForbidden, err)
+		if p.EnableBrowse {
+			p.log.Debug("doing browse")
+			return p.BrowseHandler(w, r, fullPath)
+		} else {
+			err = errors.New("can not view a directory")
+			return caddyhttp.Error(http.StatusForbidden, err)
+		}
 	}
 
 	// Get the obj from S3 (skip if we already did when looking for an index)
