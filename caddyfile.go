@@ -1,6 +1,8 @@
 package caddys3proxy
 
 import (
+	"strconv"
+
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
@@ -19,10 +21,11 @@ func init() {
 //        bucket <s3 bucket name>
 //        index  <files...>
 //        hide   <file patterns...>
-//        endpoint: <alternative endpoint>
-//        not_found_key <S3 key to a 404 page>
+//        endpoint <alternative endpoint>
 //        enable_put
 //        enable_delete
+//        error_page <http code> <s3 key to error page>
+//        default_error_page <s3 key to default error page>
 //    }
 //
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
@@ -69,8 +72,23 @@ parseLoop:
 			b.EnablePut = true
 		case "enable_delete":
 			b.EnableDelete = true
-		case "not_found_key":
-			if !h.AllArgs(&b.NotFoundKey) {
+		case "error_page":
+			if b.ErrorPages == nil {
+				b.ErrorPages = make(map[int]string)
+			}
+
+			var codeStr string
+			var key string
+			if !h.AllArgs(&codeStr, &key) {
+				return nil, h.ArgErr()
+			}
+			code, err := strconv.Atoi(codeStr)
+			if err != nil {
+				return nil, h.Errf("%s code is not a valid HTTP status code", codeStr)
+			}
+			b.ErrorPages[code] = key
+		case "default_error_page":
+			if !h.AllArgs(&b.DefaultErrorPage) {
 				return nil, h.ArgErr()
 			}
 		default:

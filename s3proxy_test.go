@@ -336,12 +336,27 @@ func TestProxy(t *testing.T) {
 			expectedCode: http.StatusNotFound,
 		},
 		{
-			name:                 "returns 404 page if not_found_key is set",
-			proxy:                S3Proxy{Bucket: bucketName, NotFoundKey: "_404.txt"},
+			name: "returns 404 page if 404 error page is set",
+			proxy: S3Proxy{
+				Bucket:           bucketName,
+				ErrorPages:       map[int]string{404: "_404.txt"},
+				DefaultErrorPage: "default_error_page.txt",
+			},
 			method:               http.MethodGet,
 			path:                 "/doesnt-exist",
 			expectedCode:         http.StatusNotFound,
 			expectedResponseText: `this is 404`,
+		},
+		{
+			name: "returns default page if default error page is set",
+			proxy: S3Proxy{
+				Bucket:           bucketName,
+				DefaultErrorPage: "default_error_page.txt",
+			},
+			method:               http.MethodGet,
+			path:                 "/doesnt-exist",
+			expectedCode:         http.StatusNotFound,
+			expectedResponseText: `this is a default error page`,
 		},
 		{
 			name:   "returns range",

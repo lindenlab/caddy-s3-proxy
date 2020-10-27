@@ -112,15 +112,21 @@ func TestParseCaddyfile(t *testing.T) {
 			},
 		},
 		testCase{
-			desc: "enable not_found_key",
+			desc: "enable error pages",
 			input: `s3proxy {
 				bucket mybucket
-				not_found_key "path/to/404.html"
+				error_page 404 "path/to/404.html"
+				error_page 403 "path/to/403.html"
+				default_error_page "path/to/default_error.html"
 			}`,
 			shouldErr: false,
 			obj: S3Proxy{
-				Bucket:      "mybucket",
-				NotFoundKey: "path/to/404.html",
+				Bucket: "mybucket",
+				ErrorPages: map[int]string{
+					403: "path/to/403.html",
+					404: "path/to/404.html",
+				},
+				DefaultErrorPage: "path/to/default_error.html",
 			},
 		},
 	}

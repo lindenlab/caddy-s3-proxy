@@ -61,10 +61,11 @@ type S3Proxy struct {
 	// Flag to determine if DELETE operations are allowed (default false)
 	EnableDelete bool
 
-	// Key that should exist in the bucket and that the proxy will fallback to
-	// if the requested path doesn't exist in the bucket. This is especially
-	// useful to make custom 404 error pages.
-	NotFoundKey string `json:"not_found_key,omitempty"`
+	// Mapping of HTTP error status to S3 keys.
+	ErrorPages map[int]string `json:"error_pages,omitempty"`
+
+	// S3 key to a default error page.
+	DefaultErrorPage string `json:"default_error_page,omitempty"`
 
 	client *s3.S3
 	log    *zap.Logger
@@ -87,6 +88,10 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 
 	if p.IndexNames == nil {
 		p.IndexNames = defaultIndexNames
+	}
+
+	if p.ErrorPages == nil {
+		p.ErrorPages = make(map[int]string)
 	}
 
 	var config aws.Config
@@ -124,21 +129,6 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	)
 
 	return nil
-}
-
-func (p S3Proxy) wrapCaddyError(w http.ResponseWriter, err error) error {
-	if err == nil {
-		return nil
-	}
-
-	caddyErr, isCaddyErr := err.(caddyhttp.HandlerError)
-	if isCaddyErr && caddyErr.StatusCode != 0 {
-		w.WriteHeader(caddyErr.StatusCode)
-	} else {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-
-	return err
 }
 
 func (p S3Proxy) getS3Object(bucket string, path string, headers http.Header) (*s3.GetObjectOutput, error) {
@@ -269,25 +259,17 @@ func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetOb
 	return err
 }
 
-func (p S3Proxy) serve404(w http.ResponseWriter, parentError error) error {
-	notFoundKey := p.NotFoundKey
-
-	if notFoundKey == "" {
-		return caddyhttp.Error(http.StatusNotFound, parentError)
-	}
-
-	obj, err := p.getS3Object(p.Bucket, notFoundKey, nil)
+func (p S3Proxy) serveErrorPage(w http.ResponseWriter, s3Key string) error {
+	obj, err := p.getS3Object(p.Bucket, s3Key, nil)
 	if err != nil {
-		return caddyhttp.Error(http.StatusNotFound, err)
+		return err
 	}
-
-	w.WriteHeader(http.StatusNotFound)
 
 	if err := p.writeResponseFromGetObject(w, obj); err != nil {
-		return caddyhttp.Error(http.StatusNotFound, err)
+		return err
 	}
 
-	return caddyhttp.Error(http.StatusNotFound, parentError)
+	return nil
 }
 
 func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
@@ -297,7 +279,7 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 
 	// If file is hidden - return 404
 	if fileHidden(fullPath, p.Hide) {
-		return p.serve404(w, nil)
+		return caddyhttp.Error(http.StatusNotFound, nil)
 	}
 
 	switch r.Method {
@@ -353,7 +335,7 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 					zap.String("key", fullPath),
 					zap.String("err", aerr.Error()),
 				)
-				return p.serve404(w, aerr)
+				return caddyhttp.Error(http.StatusNotFound, aerr)
 			default:
 				if code, ok := awsErrorCodesMapping[aerr.Code()]; ok {
 					return caddyhttp.Error(code, nil)
@@ -375,15 +357,51 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 				zap.String("err", err.Error()),
 			)
 
-			return caddyhttp.Error(http.StatusInternalServerError, err)
+			return err
 		}
 	}
 
 	return p.writeResponseFromGetObject(w, obj)
 }
 
+func (p S3Proxy) wrapHTTPErrors(w http.ResponseWriter, parentError error) error {
+	if parentError == nil {
+		return nil
+	}
+
+	caddyErr, isCaddyErr := parentError.(caddyhttp.HandlerError)
+
+	if !isCaddyErr {
+		caddyErr = caddyhttp.Error(http.StatusInternalServerError, parentError)
+	}
+
+	if caddyErr.StatusCode != 0 {
+		w.WriteHeader(caddyErr.StatusCode)
+	}
+
+	var s3Key string
+	if errorPageS3Key, hasErrorPageForCode := p.ErrorPages[caddyErr.StatusCode]; hasErrorPageForCode {
+		s3Key = errorPageS3Key
+	} else if p.DefaultErrorPage != "" {
+		s3Key = p.DefaultErrorPage
+	}
+
+	if s3Key != "" {
+		if err := p.serveErrorPage(w, s3Key); err != nil {
+			// Just log the error as we don't want to swallow the parent error.
+			p.log.Error("error serving error page",
+				zap.String("bucket", p.Bucket),
+				zap.String("key", s3Key),
+				zap.String("err", err.Error()),
+			)
+		}
+	}
+
+	return caddyErr
+}
+
 func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	return p.wrapCaddyError(w, p.doServeHTTP(w, r, next))
+	return p.wrapHTTPErrors(w, p.doServeHTTP(w, r, next))
 }
 
 func setStrHeader(w http.ResponseWriter, key string, value *string) {
