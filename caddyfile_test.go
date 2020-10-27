@@ -74,6 +74,24 @@ func TestParseCaddyfile(t *testing.T) {
 			errString: "Testfile:2 - Error during parsing: Wrong argument count or unexpected line ending after 'one'",
 		},
 		testCase{
+			desc: "errors on invalid HTTP status for error_page",
+			input: `s3proxy {
+				bucket mybucket
+				error_page invalid "path/to/404.html"
+			}`,
+			shouldErr: true,
+			errString: "Testfile:3 - Error during parsing: 'invalid' is not a valid HTTP status code",
+		},
+		testCase{
+			desc: "errors on too many arguments for error_page",
+			input: `s3proxy {
+				bucket mybucket
+				error_page 403 "path/to/404.html" "what's this?"
+			}`,
+			shouldErr: true,
+			errString: "Testfile:3 - Error during parsing: Wrong argument count or unexpected line ending after 'what's this?'",
+		},
+		testCase{
 			desc: "endpoint gets set",
 			input: `s3proxy {
 				bucket mybucket

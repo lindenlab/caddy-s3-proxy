@@ -85,7 +85,7 @@ parseLoop:
 
 				httpStatus, err := strconv.Atoi(httpStatusStr)
 				if err != nil {
-					return nil, h.Errf("%s code is not a valid HTTP status code", httpStatusStr)
+					return nil, h.Errf("'%s' is not a valid HTTP status code", httpStatusStr)
 				}
 
 				b.ErrorPages[httpStatus] = s3Key
