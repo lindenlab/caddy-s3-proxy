@@ -117,7 +117,7 @@ func TestParseCaddyfile(t *testing.T) {
 				bucket mybucket
 				error_page 404 "path/to/404.html"
 				error_page 403 "path/to/403.html"
-				default_error_page "path/to/default_error.html"
+				error_page "path/to/default_error.html"
 			}`,
 			shouldErr: false,
 			obj: S3Proxy{

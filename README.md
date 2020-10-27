@@ -32,14 +32,8 @@ The Caddyfile directive would look something like this:
 		root   <key prefix>
 		enable_put
 		enable_delete
-
-		# error_page allows you to use a custom error page depending on the HTTP status of the response.
-		# You can repeat this directive for each http status you need to handle (e.g. 403, 404, 500)
-		error_page <http status> <S3 key to custom error page>
-
-		# default_error_page defines a custom error page that will be served should none error_page directive
-		# was defined for the response status code.
-		default_error_page <S3 key to default error page>
+		error_page <http status> <S3 key to a custom error page for this http status>
+		error_page <S3 key to a default error page>
 	}
 ```
 
@@ -52,8 +46,7 @@ The Caddyfile directive would look something like this:
 | root                | string   | no  |    | Set a "prefix" to be added to key |
 | enable_put          | bool     | yes | false   | Allow PUT method to be sent through proxy |
 | enable_delete       | bool     | yes | false   | Allow DELETE method to be sent through proxy |
-| error_page          | [int, string] | no |  | Custom error page for given HTTP error status |
-| default_error_page  | string | no |  | Custom default error page |
+| error_page          | [int, ] string | no |  | Custom error page |
 
 ## Credentials
 

@@ -24,8 +24,7 @@ func init() {
 //        endpoint <alternative endpoint>
 //        enable_put
 //        enable_delete
-//        error_page <http code> <s3 key to error page>
-//        default_error_page <s3 key to default error page>
+//        error_page [<http code>] <s3 key to error page>
 //    }
 //
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
@@ -77,18 +76,20 @@ parseLoop:
 				b.ErrorPages = make(map[int]string)
 			}
 
-			var codeStr string
-			var key string
-			if !h.AllArgs(&codeStr, &key) {
-				return nil, h.ArgErr()
-			}
-			code, err := strconv.Atoi(codeStr)
-			if err != nil {
-				return nil, h.Errf("%s code is not a valid HTTP status code", codeStr)
-			}
-			b.ErrorPages[code] = key
-		case "default_error_page":
-			if !h.AllArgs(&b.DefaultErrorPage) {
+			args := h.RemainingArgs()
+			if len(args) == 1 {
+				b.DefaultErrorPage = args[0]
+			} else if len(args) == 2 {
+				httpStatusStr := args[0]
+				s3Key := args[1]
+
+				httpStatus, err := strconv.Atoi(httpStatusStr)
+				if err != nil {
+					return nil, h.Errf("%s code is not a valid HTTP status code", httpStatusStr)
+				}
+
+				b.ErrorPages[httpStatus] = s3Key
+			} else {
 				return nil, h.ArgErr()
 			}
 		default:
