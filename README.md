@@ -68,3 +68,11 @@ In the examples directory is an example of using the s3proxy with localstack.
 Localstack contains a working version of S3 you can use for local development.
 
 Check out the examples [here](example/LOCALSTACK_EXAMPLE.md).
+
+# Contributors
+
+A big thank you to folks who have contributed to this project!
+
+<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+[![All Contributors](https://img.shields.io/badge/all_contributors-13-orange.svg?style=flat-square)](#contributors)
+<!-- ALL-CONTRIBUTORS-BADGE:END --> 
