@@ -40,8 +40,8 @@ func (i Items) GenerateJson(w http.ResponseWriter) error {
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	buf.WriteTo(w)
-	return nil
+	_, err = buf.WriteTo(w)
+	return err
 }
 
 func (i Items) GenerateHtml(w http.ResponseWriter, template *template.Template) error {
@@ -55,8 +55,8 @@ func (i Items) GenerateHtml(w http.ResponseWriter, template *template.Template) 
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	buf.WriteTo(w)
-	return nil
+	_, err = buf.WriteTo(w)
+	return err
 }
 
 // This is a lame ass default template - needs to get better
