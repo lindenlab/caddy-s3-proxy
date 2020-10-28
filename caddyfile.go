@@ -1,6 +1,8 @@
 package caddys3proxy
 
 import (
+	"strconv"
+
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
@@ -14,15 +16,16 @@ func init() {
 // requests to S3 and configures it with this syntax:
 //
 //    s3proxy [<matcher>] {
-//            root   <path to prefix S3 key with>
-//	      region <aws region>
-//	      bucket <s3 bucket name>
-//	      index  <files...>
-//	      hide   <file patterns...>
-//	      endpoint: <alternative endpoint>
-//            enable_put
-//            enable_delete
-//	      browse
+//        root   <path to prefix S3 key with>
+//        region <aws region>
+//        bucket <s3 bucket name>
+//        index  <files...>
+//        hide   <file patterns...>
+//        endpoint <alternative endpoint>
+//        enable_put
+//        enable_delete
+//        error_page [<http code>] <s3 key to error page>
+//        browse
 //    }
 //
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
@@ -71,6 +74,27 @@ parseLoop:
 			b.EnableDelete = true
 		case "browse":
 			b.EnableBrowse = true
+		case "error_page":
+			if b.ErrorPages == nil {
+				b.ErrorPages = make(map[int]string)
+			}
+
+			args := h.RemainingArgs()
+			if len(args) == 1 {
+				b.DefaultErrorPage = args[0]
+			} else if len(args) == 2 {
+				httpStatusStr := args[0]
+				s3Key := args[1]
+
+				httpStatus, err := strconv.Atoi(httpStatusStr)
+				if err != nil {
+					return nil, h.Errf("'%s' is not a valid HTTP status code", httpStatusStr)
+				}
+
+				b.ErrorPages[httpStatus] = s3Key
+			} else {
+				return nil, h.ArgErr()
+			}
 		default:
 			return nil, h.Errf("%s not a valid s3proxy option", h.Val())
 		}

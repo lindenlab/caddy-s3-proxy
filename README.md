@@ -1,3 +1,7 @@
+<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+[![All Contributors](https://img.shields.io/badge/all_contributors-13-orange.svg?style=flat-square)](#contributors)
+<!-- ALL-CONTRIBUTORS-BADGE:END --> 
+
 # caddy-s3-proxy
 
 caddy-s3-proxy allows you to proxy requests directly from S3.
@@ -28,10 +32,12 @@ The Caddyfile directive would look something like this:
 		bucket <bucket_name>
 		region <region_name>
 		index  <list of index file names>
-                endpoint <alternative S3 endpoint>
+		endpoint <alternative S3 endpoint>
 		root   <key prefix>
 		enable_put
 		enable_delete
+		error_page <http status> <S3 key to a custom error page for this http status>
+		error_page <S3 key to a default error page>
 	}
 ```
 
@@ -44,6 +50,7 @@ The Caddyfile directive would look something like this:
 | root                | string   | no  |    | Set a "prefix" to be added to key |
 | enable_put          | bool     | yes | false   | Allow PUT method to be sent through proxy |
 | enable_delete       | bool     | yes | false   | Allow DELETE method to be sent through proxy |
+| error_page          | [int, ] string | no |  | Custom error page |
 
 ## Credentials
 
@@ -68,3 +75,15 @@ In the examples directory is an example of using the s3proxy with localstack.
 Localstack contains a working version of S3 you can use for local development.
 
 Check out the examples [here](example/LOCALSTACK_EXAMPLE.md).
+
+# Contributors
+
+A big thank you to folks who have contributed to this project!
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<!-- markdownlint-enable -->
+<!-- prettier-ignore-end -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+

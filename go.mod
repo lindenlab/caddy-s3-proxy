@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.54.0 // indirect
-	github.com/aws/aws-sdk-go v1.35.15
+	github.com/aws/aws-sdk-go v1.35.16
 	github.com/caddyserver/caddy/v2 v2.2.1
 	github.com/caddyserver/xcaddy v0.1.5 // indirect
 	github.com/klauspost/cpuid v1.3.1 // indirect
