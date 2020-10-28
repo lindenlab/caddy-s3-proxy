@@ -284,12 +284,13 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, origPath 
 		name := path.Base(*obj.Key)
 		itemPath := path.Join(origPath, name)
 		size := humanize.Bytes(uint64(*obj.Size))
+		timeAgo := humanize.Time(*obj.LastModified)
 		items.Items = append(items.Items, Item{
 			Name:         name,
 			Key:          *obj.Key,
 			Url:          itemPath,
 			Size:         size,
-			LastModified: *obj.LastModified,
+			LastModified: timeAgo,
 			IsDir:        false,
 		})
 	}

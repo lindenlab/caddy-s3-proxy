@@ -2,7 +2,6 @@ package caddys3proxy
 
 import (
 	"encoding/json"
-	"time"
 )
 
 type Items struct {
@@ -12,12 +11,12 @@ type Items struct {
 }
 
 type Item struct {
-	Name         string    `json:"name"`
-	IsDir        bool      `json:"is_dir"`
-	Key          string    `json:"key"`
-	Url          string    `json:"url"`
-	Size         string    `json:"size"`
-	LastModified time.Time `json:"last_modified"`
+	Name         string `json:"name"`
+	IsDir        bool   `json:"is_dir"`
+	Key          string `json:"key"`
+	Url          string `json:"url"`
+	Size         string `json:"size"`
+	LastModified string `json:"last_modified"`
 }
 
 func (i Items) GenerateJson() string {
@@ -34,7 +33,7 @@ func (i Items) GenerateHtml() string {
 		html += "<li><a href=\"" + item.Url + "\">" + item.Name + "</a>"
 		if !item.IsDir {
 			html += " Size: " + item.Size
-			html += " Last Modified: " + item.LastModified.Format(time.RFC3339)
+			html += " Last Modified: " + item.LastModified
 		}
 		html += "</li>"
 	}
