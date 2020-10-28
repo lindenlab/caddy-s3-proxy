@@ -61,6 +61,12 @@ type S3Proxy struct {
 	// Flag to determine if DELETE operations are allowed (default false)
 	EnableDelete bool
 
+	// Mapping of HTTP error status to S3 keys.
+	ErrorPages map[int]string `json:"error_pages,omitempty"`
+
+	// S3 key to a default error page.
+	DefaultErrorPage string `json:"default_error_page,omitempty"`
+
 	client *s3.S3
 	log    *zap.Logger
 }
@@ -82,6 +88,10 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 
 	if p.IndexNames == nil {
 		p.IndexNames = defaultIndexNames
+	}
+
+	if p.ErrorPages == nil {
+		p.ErrorPages = make(map[int]string)
 	}
 
 	var config aws.Config
@@ -212,7 +222,7 @@ func (p S3Proxy) HandlePut(w http.ResponseWriter, r *http.Request, key string) e
 
 func (p S3Proxy) HandleDelete(w http.ResponseWriter, r *http.Request, key string) error {
 	isDir := strings.HasSuffix(key, "/")
-	if isDir || !p.EnablePut {
+	if isDir || !p.EnableDelete {
 		err := errors.New("method not allowed")
 		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
 	}
@@ -228,7 +238,41 @@ func (p S3Proxy) HandleDelete(w http.ResponseWriter, r *http.Request, key string
 
 	return nil
 }
-func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+
+func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetObjectOutput) error {
+	// Copy headers from AWS response to our response
+	setStrHeader(w, "Content-Disposition", obj.ContentDisposition)
+	setStrHeader(w, "Content-Encoding", obj.ContentEncoding)
+	setStrHeader(w, "Content-Language", obj.ContentLanguage)
+	setStrHeader(w, "Content-Range", obj.ContentRange)
+	setStrHeader(w, "Content-Type", obj.ContentType)
+	setStrHeader(w, "ETag", obj.ETag)
+	setTimeHeader(w, "Last-Modified", obj.LastModified)
+
+	var err error
+	if obj.Body != nil {
+		// io.Copy will set Content-Length
+		w.Header().Del("Content-Length")
+		_, err = io.Copy(w, obj.Body)
+	}
+
+	return err
+}
+
+func (p S3Proxy) serveErrorPage(w http.ResponseWriter, s3Key string) error {
+	obj, err := p.getS3Object(p.Bucket, s3Key, nil)
+	if err != nil {
+		return err
+	}
+
+	if err := p.writeResponseFromGetObject(w, obj); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
 	fullPath := joinPath(repl.ReplaceAll(p.Root, ""), r.URL.Path)
@@ -239,13 +283,15 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	}
 
 	switch r.Method {
-	case http.MethodPost:
-		err := errors.New("method not allowed")
-		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+	case http.MethodGet:
+		break
 	case http.MethodPut:
 		return p.HandlePut(w, r, fullPath)
 	case http.MethodDelete:
 		return p.HandleDelete(w, r, fullPath)
+	default:
+		err := errors.New("method not allowed")
+		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
 	}
 
 	// TODO: mayebe implement filtering out files (HiddenFiles)
@@ -301,6 +347,7 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 					zap.String("key", fullPath),
 					zap.String("err", aerr.Error()),
 				)
+
 				return caddyhttp.Error(http.StatusForbidden, err)
 			}
 		} else {
@@ -309,28 +356,52 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 				zap.String("key", fullPath),
 				zap.String("err", err.Error()),
 			)
-			return caddyhttp.Error(http.StatusInternalServerError, err)
-		}
-	}
 
-	// Copy headers from AWS response to our response
-	setStrHeader(w, "Content-Disposition", obj.ContentDisposition)
-	setStrHeader(w, "Content-Encoding", obj.ContentEncoding)
-	setStrHeader(w, "Content-Language", obj.ContentLanguage)
-	setStrHeader(w, "Content-Range", obj.ContentRange)
-	setStrHeader(w, "Content-Type", obj.ContentType)
-	setStrHeader(w, "ETag", obj.ETag)
-	setTimeHeader(w, "Last-Modified", obj.LastModified)
-
-	if obj.Body != nil {
-		// io.Copy will set Content-Length
-		w.Header().Del("Content-Length")
-		if _, err := io.Copy(w, obj.Body); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	return p.writeResponseFromGetObject(w, obj)
+}
+
+func (p S3Proxy) wrapHTTPErrors(w http.ResponseWriter, parentError error) error {
+	if parentError == nil {
+		return nil
+	}
+
+	caddyErr, isCaddyErr := parentError.(caddyhttp.HandlerError)
+
+	if !isCaddyErr {
+		caddyErr = caddyhttp.Error(http.StatusInternalServerError, parentError)
+	}
+
+	if caddyErr.StatusCode != 0 {
+		w.WriteHeader(caddyErr.StatusCode)
+	}
+
+	var s3Key string
+	if errorPageS3Key, hasErrorPageForCode := p.ErrorPages[caddyErr.StatusCode]; hasErrorPageForCode {
+		s3Key = errorPageS3Key
+	} else if p.DefaultErrorPage != "" {
+		s3Key = p.DefaultErrorPage
+	}
+
+	if s3Key != "" {
+		if err := p.serveErrorPage(w, s3Key); err != nil {
+			// Just log the error as we don't want to swallow the parent error.
+			p.log.Error("error serving error page",
+				zap.String("bucket", p.Bucket),
+				zap.String("key", s3Key),
+				zap.String("err", err.Error()),
+			)
+		}
+	}
+
+	return caddyErr
+}
+
+func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+	return p.wrapHTTPErrors(w, p.doServeHTTP(w, r, next))
 }
 
 func setStrHeader(w http.ResponseWriter, key string, value *string) {

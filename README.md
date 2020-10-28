@@ -32,10 +32,12 @@ The Caddyfile directive would look something like this:
 		bucket <bucket_name>
 		region <region_name>
 		index  <list of index file names>
-                endpoint <alternative S3 endpoint>
+		endpoint <alternative S3 endpoint>
 		root   <key prefix>
 		enable_put
 		enable_delete
+		error_page <http status> <S3 key to a custom error page for this http status>
+		error_page <S3 key to a default error page>
 	}
 ```
 
@@ -48,6 +50,7 @@ The Caddyfile directive would look something like this:
 | root                | string   | no  |    | Set a "prefix" to be added to key |
 | enable_put          | bool     | yes | false   | Allow PUT method to be sent through proxy |
 | enable_delete       | bool     | yes | false   | Allow DELETE method to be sent through proxy |
+| error_page          | [int, ] string | no |  | Custom error page |
 
 ## Credentials
 
