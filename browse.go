@@ -2,7 +2,6 @@ package caddys3proxy
 
 import (
 	"encoding/json"
-	"strconv"
 	"time"
 )
 
@@ -16,7 +15,8 @@ type Item struct {
 	Name         string    `json:"name"`
 	IsDir        bool      `json:"is_dir"`
 	Key          string    `json:"key"`
-	Size         int64     `json:"size"`
+	Url          string    `json:"url"`
+	Size         string    `json:"size"`
 	LastModified time.Time `json:"last_modified"`
 }
 
@@ -31,9 +31,9 @@ func (i Items) GenerateHtml() string {
 	// and other stuff.
 	html := "<!DOCTYPE html><html><body><ul>"
 	for _, item := range i.Items {
-		html += "<li><a href=\"" + item.Key + "\">" + item.Name + "</a>"
+		html += "<li><a href=\"" + item.Url + "\">" + item.Name + "</a>"
 		if !item.IsDir {
-			html += " Size: " + strconv.FormatInt(item.Size, 10)
+			html += " Size: " + item.Size
 			html += " Last Modified: " + item.LastModified.Format(time.RFC3339)
 		}
 		html += "</li>"

@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"go.uber.org/zap"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/caddyserver/caddy/v2"
+	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
+	"github.com/dustin/go-humanize"
+	"go.uber.org/zap"
 )
 
 var defaultIndexNames = []string{"index.html", "index.txt"}
@@ -243,11 +243,11 @@ func (p S3Proxy) DeleteHandler(w http.ResponseWriter, r *http.Request, key strin
 	return nil
 }
 
-func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, path string) error {
+func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, origPath string, key string) error {
 
 	// We should only get here if the path ends in a /, however, when we make the
 	//call to ListObjects no / should be there
-	prefix := strings.TrimPrefix(path, "/")
+	prefix := strings.TrimPrefix(key, "/")
 
 	input := s3.ListObjectsV2Input{
 		Bucket: aws.String(p.Bucket),
@@ -262,7 +262,7 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, path stri
 	if err != nil {
 		p.log.Debug("error in ListObjectsV2",
 			zap.String("bucket", p.Bucket),
-			zap.String("path", path),
+			zap.String("prefix", prefix),
 			zap.String("err", err.Error()),
 		)
 		// TODO: map aws errors to caddy errors
@@ -281,10 +281,14 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, path stri
 		})
 	}
 	for _, obj := range result.Contents {
+		name := path.Base(*obj.Key)
+		itemPath := path.Join(origPath, name)
+		size := humanize.Bytes(uint64(*obj.Size))
 		items.Items = append(items.Items, Item{
-			Name:         *obj.Key,
+			Name:         name,
 			Key:          *obj.Key,
-			Size:         *obj.Size,
+			Url:          itemPath,
+			Size:         size,
 			LastModified: *obj.LastModified,
 			IsDir:        false,
 		})
@@ -384,7 +388,7 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 	if isDir {
 		if p.EnableBrowse {
 			p.log.Debug("doing browse")
-			return p.BrowseHandler(w, r, fullPath)
+			return p.BrowseHandler(w, r, r.URL.Path, fullPath)
 		} else {
 			err = errors.New("can not view a directory")
 			return caddyhttp.Error(http.StatusForbidden, err)
