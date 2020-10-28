@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -65,14 +66,18 @@ type S3Proxy struct {
 	// Flag to enable browsing of "directories" in S3 (paths that end with a /)
 	EnableBrowse bool
 
+	// Path to a template file to use for generating browse dir html page
+	BrowseTemplate string
+
 	// Mapping of HTTP error status to S3 keys.
 	ErrorPages map[int]string `json:"error_pages,omitempty"`
 
 	// S3 key to a default error page.
 	DefaultErrorPage string `json:"default_error_page,omitempty"`
 
-	client *s3.S3
-	log    *zap.Logger
+	client      *s3.S3
+	dirTemplate *template.Template
+	log         *zap.Logger
 }
 
 // CaddyModule returns the Caddy module information.
@@ -96,6 +101,24 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 
 	if p.ErrorPages == nil {
 		p.ErrorPages = make(map[int]string)
+	}
+
+	if p.EnableBrowse {
+		var tpl *template.Template
+		var err error
+
+		if p.BrowseTemplate != "" {
+			tpl, err = template.ParseFiles(p.BrowseTemplate)
+			if err != nil {
+				return fmt.Errorf("parsing browse template file: %v", err)
+			}
+		} else {
+			tpl, err = template.New("default_listing").Parse(defaultBrowseTemplate)
+			if err != nil {
+				return fmt.Errorf("parsing default browse template: %v", err)
+			}
+		}
+		p.dirTemplate = tpl
 	}
 
 	var config aws.Config
@@ -130,6 +153,7 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 		zap.String("region", p.Region),
 		zap.Bool("enable_put", p.EnablePut),
 		zap.Bool("enable_delete", p.EnableDelete),
+		zap.Bool("enable_browse", p.EnableBrowse),
 	)
 
 	return nil
@@ -253,7 +277,7 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, origPath 
 		Bucket: aws.String(p.Bucket),
 		// ContinuationToken: TODO
 		// StartAfter: TODO - but I don't think I should use this
-		Prefix: aws.String(prefix), // TODO: do I need to remove the trailing slash?
+		Prefix: aws.String(prefix),
 		// MaxKeys: TODO
 		Delimiter: aws.String("/"),
 	}
@@ -297,17 +321,17 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, origPath 
 
 	if r.Header.Get("Content-type") == "application/json" {
 		// Give JSON output of dir
-		output := items.GenerateJson()
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		fmt.Fprintln(w, output)
+		err = items.GenerateJson(w)
 	} else {
 		// Generate html response of dir
-		output := items.GenerateHtml()
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintln(w, output)
+		err = items.GenerateHtml(w, p.dirTemplate)
 	}
 
-	return nil
+	if err != nil {
+		err = caddyhttp.Error(http.StatusInternalServerError, err)
+	}
+
+	return err
 }
 
 func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetObjectOutput) error {

@@ -38,6 +38,7 @@ The Caddyfile directive would look something like this:
 		enable_delete
 		error_page <http status> <S3 key to a custom error page for this http status>
 		error_page <S3 key to a default error page>
+		browse [<path to template>]
 	}
 ```
 
@@ -51,6 +52,7 @@ The Caddyfile directive would look something like this:
 | enable_put          | bool     | yes | false   | Allow PUT method to be sent through proxy |
 | enable_delete       | bool     | yes | false   | Allow DELETE method to be sent through proxy |
 | error_page          | [int, ] string | no |  | Custom error page |
+| browse              | [string] | no |  | Turns on a directory view for portial keys, an option path to a template can be given |
 
 ## Credentials
 
@@ -81,9 +83,7 @@ Check out the examples [here](example/LOCALSTACK_EXAMPLE.md).
 A big thank you to folks who have contributed to this project!
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<!-- markdownlint-enable -->
-<!-- prettier-ignore-end -->
+<!-- prettier-ignore -->
+
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 

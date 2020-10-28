@@ -25,7 +25,7 @@ func init() {
 //        enable_put
 //        enable_delete
 //        error_page [<http code>] <s3 key to error page>
-//        browse
+//        browse [<template file>]
 //    }
 //
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
@@ -74,6 +74,13 @@ parseLoop:
 			b.EnableDelete = true
 		case "browse":
 			b.EnableBrowse = true
+			args := h.RemainingArgs()
+			if len(args) == 1 {
+				b.BrowseTemplate = args[0]
+			}
+			if len(args) > 1 {
+				return nil, h.ArgErr()
+			}
 		case "error_page":
 			if b.ErrorPages == nil {
 				b.ErrorPages = make(map[int]string)

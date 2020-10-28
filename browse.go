@@ -1,8 +1,18 @@
 package caddys3proxy
 
 import (
+	"bytes"
 	"encoding/json"
+	"html/template"
+	"net/http"
+	"sync"
 )
+
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
 
 type Items struct {
 	NextToken string `json:"next_token"`
@@ -19,23 +29,50 @@ type Item struct {
 	LastModified string `json:"last_modified"`
 }
 
-func (i Items) GenerateJson() string {
-	bytes, _ := json.Marshal(i)
-	return string(bytes)
+func (i Items) GenerateJson(w http.ResponseWriter) error {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	err := json.NewEncoder(buf).Encode(i)
+	if err != nil {
+		return err
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	buf.WriteTo(w)
+	return nil
 }
 
-func (i Items) GenerateHtml() string {
-	// This is a total hack to show something.  This needs to change to use a template - and allow an
-	// the template to be overridden by a user.  Doing this just for now to work out the data structures
-	// and other stuff.
-	html := "<!DOCTYPE html><html><body><ul>"
-	for _, item := range i.Items {
-		html += "<li><a href=\"" + item.Url + "\">" + item.Name + "</a>"
-		if !item.IsDir {
-			html += " Size: " + item.Size
-			html += " Last Modified: " + item.LastModified
-		}
-		html += "</li>"
+func (i Items) GenerateHtml(w http.ResponseWriter, template *template.Template) error {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	err := template.Execute(buf, i)
+	if err != nil {
+		return err
 	}
-	return html + "</ul></body></html>"
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	buf.WriteTo(w)
+	return nil
 }
+
+// This is a lame ass default template - needs to get better
+const defaultBrowseTemplate = `<!DOCTYPE html>
+<html>
+        <body>
+                <ul>
+                {{- range .Items }}
+                <li>
+                {{- if .IsDir}}
+                <a href="{{html .Url}}">{{html .Name}}/</a>
+                {{- else}}
+                <a href="{{html .Url}}">{{html .Name}}</a> Size: {{html .Size}} Last Modified: {{html .LastModified}}
+                {{- end}}
+                </li>
+                {{- end }}
+                </ul>
+        </body>
+</html>`
