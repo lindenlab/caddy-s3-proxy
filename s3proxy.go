@@ -272,6 +272,10 @@ func (p S3Proxy) serveErrorPage(w http.ResponseWriter, s3Key string) error {
 	return nil
 }
 
+func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+	return p.wrapHTTPErrors(w, p.doServeHTTP(w, r, next))
+}
+
 func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
@@ -398,10 +402,6 @@ func (p S3Proxy) wrapHTTPErrors(w http.ResponseWriter, parentError error) error 
 	}
 
 	return caddyErr
-}
-
-func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	return p.wrapHTTPErrors(w, p.doServeHTTP(w, r, next))
 }
 
 func setStrHeader(w http.ResponseWriter, key string, value *string) {

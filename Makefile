@@ -1,3 +1,4 @@
+export GO111MODULE=on
 
 .PHONY: build
 build: caddy
@@ -16,7 +17,7 @@ test:  ## Run go test on source base
 
 .PHONY: lint
 lint:  ## Run golint on source base
-	@golangci-lint run --no-config ./...
+	@golangci-lint run ./...
 
 .DEFAULT_GOAL := help
 .PHONY: help
