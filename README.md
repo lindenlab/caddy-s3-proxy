@@ -1,5 +1,5 @@
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors)
 <!-- ALL-CONTRIBUTORS-BADGE:END --> 
 
 # caddy-s3-proxy
@@ -88,6 +88,7 @@ A big thank you to folks who have contributed to this project!
 <table>
   <tr>
     <td align="center"><a href="https://github.com/rayjlinden"><img src="https://avatars0.githubusercontent.com/u/42587610?v=4" width="100px;" alt=""/><br /><sub><b>rayjlinden</b></sub></a></td>
+    <td align="center"><a href="https://github.com/gilbsgilbs"><img src="https://avatars2.githubusercontent.com/u/3407667?v=4" width="100px;" alt=""/><br /><sub><b>Gilbert Gilb's</b></sub></a></td>
   </tr>
 </table>
 
