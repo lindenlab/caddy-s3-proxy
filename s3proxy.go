@@ -3,6 +3,8 @@ package caddys3proxy
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -12,14 +14,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"go.uber.org/zap"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/caddyserver/caddy/v2"
+	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
+	"github.com/dustin/go-humanize"
+	"go.uber.org/zap"
 )
 
 var defaultIndexNames = []string{"index.html", "index.txt"}
@@ -61,14 +63,21 @@ type S3Proxy struct {
 	// Flag to determine if DELETE operations are allowed (default false)
 	EnableDelete bool
 
+	// Flag to enable browsing of "directories" in S3 (paths that end with a /)
+	EnableBrowse bool
+
+	// Path to a template file to use for generating browse dir html page
+	BrowseTemplate string
+
 	// Mapping of HTTP error status to S3 keys.
 	ErrorPages map[int]string `json:"error_pages,omitempty"`
 
 	// S3 key to a default error page.
 	DefaultErrorPage string `json:"default_error_page,omitempty"`
 
-	client *s3.S3
-	log    *zap.Logger
+	client      *s3.S3
+	dirTemplate *template.Template
+	log         *zap.Logger
 }
 
 // CaddyModule returns the Caddy module information.
@@ -92,6 +101,24 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 
 	if p.ErrorPages == nil {
 		p.ErrorPages = make(map[int]string)
+	}
+
+	if p.EnableBrowse {
+		var tpl *template.Template
+		var err error
+
+		if p.BrowseTemplate != "" {
+			tpl, err = template.ParseFiles(p.BrowseTemplate)
+			if err != nil {
+				return fmt.Errorf("parsing browse template file: %v", err)
+			}
+		} else {
+			tpl, err = template.New("default_listing").Parse(defaultBrowseTemplate)
+			if err != nil {
+				return fmt.Errorf("parsing default browse template: %v", err)
+			}
+		}
+		p.dirTemplate = tpl
 	}
 
 	var config aws.Config
@@ -126,6 +153,7 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 		zap.String("region", p.Region),
 		zap.Bool("enable_put", p.EnablePut),
 		zap.Bool("enable_delete", p.EnableDelete),
+		zap.Bool("enable_browse", p.EnableBrowse),
 	)
 
 	return nil
@@ -185,7 +213,7 @@ func makeAwsString(str string) *string {
 	return aws.String(str)
 }
 
-func (p S3Proxy) HandlePut(w http.ResponseWriter, r *http.Request, key string) error {
+func (p S3Proxy) PutHandler(w http.ResponseWriter, r *http.Request, key string) error {
 	isDir := strings.HasSuffix(key, "/")
 	if isDir || !p.EnablePut {
 		err := errors.New("method not allowed")
@@ -220,7 +248,7 @@ func (p S3Proxy) HandlePut(w http.ResponseWriter, r *http.Request, key string) e
 	return nil
 }
 
-func (p S3Proxy) HandleDelete(w http.ResponseWriter, r *http.Request, key string) error {
+func (p S3Proxy) DeleteHandler(w http.ResponseWriter, r *http.Request, key string) error {
 	isDir := strings.HasSuffix(key, "/")
 	if isDir || !p.EnableDelete {
 		err := errors.New("method not allowed")
@@ -237,6 +265,73 @@ func (p S3Proxy) HandleDelete(w http.ResponseWriter, r *http.Request, key string
 	}
 
 	return nil
+}
+
+func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, origPath string, key string) error {
+
+	// We should only get here if the path ends in a /, however, when we make the
+	//call to ListObjects no / should be there
+	prefix := strings.TrimPrefix(key, "/")
+
+	input := s3.ListObjectsV2Input{
+		Bucket: aws.String(p.Bucket),
+		// ContinuationToken: TODO
+		// StartAfter: TODO - but I don't think I should use this
+		Prefix: aws.String(prefix),
+		// MaxKeys: TODO
+		Delimiter: aws.String("/"),
+	}
+
+	result, err := p.client.ListObjectsV2(&input)
+	if err != nil {
+		p.log.Debug("error in ListObjectsV2",
+			zap.String("bucket", p.Bucket),
+			zap.String("prefix", prefix),
+			zap.String("err", err.Error()),
+		)
+		// TODO: map aws errors to caddy errors
+		return caddyhttp.Error(http.StatusNotFound, nil)
+	}
+
+	items := Items{}
+	items.Count = *result.KeyCount
+	if result.NextContinuationToken != nil {
+		items.NextToken = *result.NextContinuationToken
+	}
+	for _, dir := range result.CommonPrefixes {
+		items.Items = append(items.Items, Item{
+			Name:  *dir.Prefix,
+			IsDir: true,
+		})
+	}
+	for _, obj := range result.Contents {
+		name := path.Base(*obj.Key)
+		itemPath := path.Join(origPath, name)
+		size := humanize.Bytes(uint64(*obj.Size))
+		timeAgo := humanize.Time(*obj.LastModified)
+		items.Items = append(items.Items, Item{
+			Name:         name,
+			Key:          *obj.Key,
+			Url:          itemPath,
+			Size:         size,
+			LastModified: timeAgo,
+			IsDir:        false,
+		})
+	}
+
+	if r.Header.Get("Content-type") == "application/json" {
+		// Give JSON output of dir
+		err = items.GenerateJson(w)
+	} else {
+		// Generate html response of dir
+		err = items.GenerateHtml(w, p.dirTemplate)
+	}
+
+	if err != nil {
+		err = caddyhttp.Error(http.StatusInternalServerError, err)
+	}
+
+	return err
 }
 
 func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetObjectOutput) error {
@@ -290,15 +385,13 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 	case http.MethodGet:
 		break
 	case http.MethodPut:
-		return p.HandlePut(w, r, fullPath)
+		return p.PutHandler(w, r, fullPath)
 	case http.MethodDelete:
-		return p.HandleDelete(w, r, fullPath)
+		return p.DeleteHandler(w, r, fullPath)
 	default:
 		err := errors.New("method not allowed")
 		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
 	}
-
-	// TODO: mayebe implement filtering out files (HiddenFiles)
 
 	isDir := strings.HasSuffix(fullPath, "/")
 	var obj *s3.GetObjectOutput
@@ -308,7 +401,7 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 		for _, indexPage := range p.IndexNames {
 			indexPath := path.Join(fullPath, indexPage)
 			obj, err = p.getS3Object(p.Bucket, indexPath, r.Header)
-			if obj != nil {
+			if err == nil {
 				// We found an index!
 				isDir = false
 				break
@@ -318,9 +411,13 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 
 	// If this is still a dir then browse or throw an error
 	if isDir {
-		// TODO: implement browse
-		err := errors.New("can not view a directory")
-		return caddyhttp.Error(http.StatusForbidden, err)
+		if p.EnableBrowse {
+			p.log.Debug("doing browse")
+			return p.BrowseHandler(w, r, r.URL.Path, fullPath)
+		} else {
+			err = errors.New("can not view a directory")
+			return caddyhttp.Error(http.StatusForbidden, err)
+		}
 	}
 
 	// Get the obj from S3 (skip if we already did when looking for an index)

@@ -1,7 +1,9 @@
 {
-  "files": [
-    "README.md"
-  ],
+
+  "projectName": "caddy-s3-proxy",
+  "repoType": "github",
+  "files": ["README.md"],
+  "commit": true,
   "imageSize": 100,
   "contributorsPerLine": 7,
   "contributorsSortAlphabetically": false,
