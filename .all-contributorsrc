@@ -1,6 +1,6 @@
 {
+
   "projectName": "caddy-s3-proxy",
-  "projectOwner": "rayjlinden",
   "repoType": "github",
   "files": ["README.md"],
   "commit": true,
@@ -9,5 +9,21 @@
   "contributorsSortAlphabetically": false,
   "badgeTemplate": "[![All Contributors](https://img.shields.io/badge/all_contributors-<%= contributors.length %>-orange.svg?style=flat-square)](#contributors)",
   "contributorTemplate": "<a href=\"<%= contributor.profile %>\"><img src=\"<%= contributor.avatar_url %>\" width=\"<%= options.imageSize %>px;\" alt=\"\"/><br /><sub><b><%= contributor.name %></b></sub></a>",
-  "contributors": []
+  "skipCi": true,
+  "contributors": [
+    {
+      "login": "rayjlinden",
+      "name": "rayjlinden",
+      "avatar_url": "https://avatars0.githubusercontent.com/u/42587610?v=4",
+      "profile": "https://github.com/rayjlinden",
+      "contributions": [
+        "code",
+        "doc"
+      ]
+    }
+  ],
+  "projectName": "caddy-s3-proxy",
+  "projectOwner": "lindenlab",
+  "repoType": "github",
+  "repoHost": "https://github.com"
 }
