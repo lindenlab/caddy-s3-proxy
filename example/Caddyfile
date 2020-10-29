@@ -29,6 +29,7 @@
 			endpoint "http://localstack:4566/"
 			enable_put
 			enable_delete
+			browse
                 }
 	}
 
