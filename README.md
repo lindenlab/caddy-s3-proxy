@@ -77,6 +77,7 @@ In the examples directory is an example of using the s3proxy with localstack.
 Localstack contains a working version of S3 you can use for local development.
 
 Check out the examples [here](example/LOCALSTACK_EXAMPLE.md).
+You can also just run ```make example``` to build a docker image with the plugin and launch the compose example.
 
 # Contributors
 
