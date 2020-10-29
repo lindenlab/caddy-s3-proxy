@@ -19,6 +19,10 @@ test:  ## Run go test on source base
 lint:  ## Run golint on source base
 	@golangci-lint run ./...
 
+.PHONY: example
+example: docker  ## Run docker-compose up in the example directory
+	cd example && docker-compose up
+
 .DEFAULT_GOAL := help
 .PHONY: help
 help:   ## Display this help message
