@@ -52,7 +52,7 @@ The Caddyfile directive would look something like this:
 | enable_put          | bool     | yes | false   | Allow PUT method to be sent through proxy |
 | enable_delete       | bool     | yes | false   | Allow DELETE method to be sent through proxy |
 | error_page          | [int, ] string | no |  | Custom error page |
-| browse              | [string] | no |  | Turns on a directory view for portial keys, an option path to a template can be given |
+| browse              | [string] | no |  | Turns on a directory view for partial keys, an optional path to a template can be given |
 
 ## Credentials
 
