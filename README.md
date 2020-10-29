@@ -1,6 +1,8 @@
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
 [![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors)
 <!-- ALL-CONTRIBUTORS-BADGE:END --> 
+[![golangci-lint Actions Status](https://github.com/lindenlab/caddy-s3-proxy/workflows/golangci-lint/badge.svg)](https://github.com/lindenlab/caddy-s3-proxy/actions)
+[![test Actions Status](https://github.com/lindenlab/caddy-s3-proxy/workflows/test/badge.svg)](https://github.com/lindenlab/caddy-s3-proxy/actions)
 
 # caddy-s3-proxy
 
