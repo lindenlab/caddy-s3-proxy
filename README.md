@@ -1,5 +1,5 @@
 [![golangci-lint Actions Status](https://github.com/lindenlab/caddy-s3-proxy/workflows/golangci-lint/badge.svg)](https://github.com/lindenlab/caddy-s3-proxy/actions)
-[![test Actions Status](https://github.com/lindenlab/caddy-s3-proxy/workflows/test/badge.svg)](https://github.com/lindenlab/caddy-s3-proxy/actions)
+[![Test Actions Status](https://github.com/lindenlab/caddy-s3-proxy/workflows/Test/badge.svg)](https://github.com/lindenlab/caddy-s3-proxy/actions)
 [![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors)
 
 # caddy-s3-proxy
