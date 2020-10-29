@@ -36,7 +36,7 @@ func init() {
 	caddy.RegisterModule(S3Proxy{})
 }
 
-// S3Proxy implements a proxy to return objects from S3
+// S3Proxy implements a proxy to return, set, delete or browse objects from S3
 type S3Proxy struct {
 	// The path to the root of the site. Default is `{http.vars.root}` if set,
 	// Or if not set the value is "" - meaning use the whole path as a key.
@@ -153,6 +153,7 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 		zap.String("region", p.Region),
 		zap.Bool("enable_put", p.EnablePut),
 		zap.Bool("enable_delete", p.EnableDelete),
+		zap.String("default_error_page", p.DefaultErrorPage),
 		zap.Bool("enable_browse", p.EnableBrowse),
 	)
 
@@ -267,7 +268,7 @@ func (p S3Proxy) DeleteHandler(w http.ResponseWriter, r *http.Request, key strin
 	return nil
 }
 
-func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, origPath string, key string) error {
+func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key string) error {
 
 	// We should only get here if the path ends in a /, however, when we make the
 	//call to ListObjects no / should be there
@@ -306,7 +307,7 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, origPath 
 	}
 	for _, obj := range result.Contents {
 		name := path.Base(*obj.Key)
-		itemPath := path.Join(origPath, name)
+		itemPath := "./" + name
 		size := humanize.Bytes(uint64(*obj.Size))
 		timeAgo := humanize.Time(*obj.LastModified)
 		items.Items = append(items.Items, Item{
@@ -412,8 +413,7 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 	// If this is still a dir then browse or throw an error
 	if isDir {
 		if p.EnableBrowse {
-			p.log.Debug("doing browse")
-			return p.BrowseHandler(w, r, r.URL.Path, fullPath)
+			return p.BrowseHandler(w, r, fullPath)
 		} else {
 			err = errors.New("can not view a directory")
 			return caddyhttp.Error(http.StatusForbidden, err)
