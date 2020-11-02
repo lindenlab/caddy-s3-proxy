@@ -380,18 +380,17 @@ func TestProxy(t *testing.T) {
 			expectedCode:         http.StatusOK,
 			expectedResponseText: `{"foo": "bar"}`,
 		},
-		// This test case currently fails because of a bug in LocalStack.
-		// {
-		// 	name:   "returns 412 If-Match",
-		// 	proxy:  S3Proxy{Bucket: bucketName},
-		// 	method: http.MethodGet,
-		// 	path:   "/test.json",
-		// 	headers: http.Header{
-		// 		"If-Match": []string{`"no good etag"`},
-		// 	},
-		// 	expectedCode:         http.StatusPreconditionFailed,
-		// 	expectsEmptyResponse: true,
-		// },
+		{
+			name:   "returns 412 If-Match",
+			proxy:  S3Proxy{Bucket: bucketName},
+			method: http.MethodGet,
+			path:   "/test.json",
+			headers: http.Header{
+				"If-Match": []string{`"no good etag"`},
+			},
+			expectedCode:         http.StatusPreconditionFailed,
+			expectsEmptyResponse: true,
+		},
 		{
 			name:   "returns 304 If-None-Match",
 			proxy:  S3Proxy{Bucket: bucketName},
@@ -425,18 +424,17 @@ func TestProxy(t *testing.T) {
 			expectedCode:         http.StatusOK,
 			expectedResponseText: `{"foo": "bar"}`,
 		},
-		// This test case currently fails because of a bug in LocalStack.
-		// {
-		// 	name:   "returns 412 If-Unmodified-Since",
-		// 	proxy:  S3Proxy{Bucket: bucketName},
-		// 	method: http.MethodGet,
-		// 	path:   "/test.json",
-		// 	headers: http.Header{
-		// 		"If-Unmodified-Since": []string{`Wed, 21 Oct 2015 07:28:00 GMT`},
-		// 	},
-		// 	expectedCode:         http.StatusPreconditionFailed,
-		// 	expectsEmptyResponse: true,
-		// },
+		{
+			name:   "returns 412 If-Unmodified-Since",
+			proxy:  S3Proxy{Bucket: bucketName},
+			method: http.MethodGet,
+			path:   "/test.json",
+			headers: http.Header{
+				"If-Unmodified-Since": []string{`Wed, 21 Oct 2015 07:28:00 GMT`},
+			},
+			expectedCode:         http.StatusPreconditionFailed,
+			expectsEmptyResponse: true,
+		},
 		{
 			name:   "returns 200 If-Modified-Since",
 			proxy:  S3Proxy{Bucket: bucketName},
