@@ -18,6 +18,7 @@ type Items struct {
 	NextToken string `json:"next_token"`
 	Count     int64  `json:"count"`
 	Items     []Item `json:"items"`
+	MoreLink  string `json:"more"`
 }
 
 type Item struct {
@@ -67,12 +68,16 @@ const defaultBrowseTemplate = `<!DOCTYPE html>
                 {{- range .Items }}
                 <li>
                 {{- if .IsDir}}
-                <a href="{{html .Url}}">{{html .Name}}/</a>
+                <a href="{{html .Url}}">{{html .Name}}</a>
                 {{- else}}
                 <a href="{{html .Url}}">{{html .Name}}</a> Size: {{html .Size}} Last Modified: {{html .LastModified}}
                 {{- end}}
                 </li>
                 {{- end }}
                 </ul>
+		<p>number of items: {{ .Count }}</p>
+		{{- if .MoreLink }}
+		<a href="{{ html .MoreLink }}">more...</a>
+		{{- end }}
         </body>
 </html>`
