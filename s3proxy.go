@@ -8,9 +8,11 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -268,40 +270,54 @@ func (p S3Proxy) DeleteHandler(w http.ResponseWriter, r *http.Request, key strin
 	return nil
 }
 
-func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key string) error {
-
+func (p S3Proxy) ConstructListObjInput(r *http.Request, key string) s3.ListObjectsV2Input {
 	// We should only get here if the path ends in a /, however, when we make the
 	//call to ListObjects no / should be there
 	prefix := strings.TrimPrefix(key, "/")
 
 	input := s3.ListObjectsV2Input{
-		Bucket: aws.String(p.Bucket),
-		// ContinuationToken: TODO
-		// StartAfter: TODO - but I don't think I should use this
-		Prefix: aws.String(prefix),
-		// MaxKeys: TODO
+		Bucket:    aws.String(p.Bucket),
+		Prefix:    aws.String(prefix),
 		Delimiter: aws.String("/"),
 	}
 
-	result, err := p.client.ListObjectsV2(&input)
-	if err != nil {
-		p.log.Debug("error in ListObjectsV2",
-			zap.String("bucket", p.Bucket),
-			zap.String("prefix", prefix),
-			zap.String("err", err.Error()),
-		)
-		// TODO: map aws errors to caddy errors
-		return caddyhttp.Error(http.StatusNotFound, nil)
+	nextToken := r.URL.Query().Get("next")
+	if nextToken != "" {
+		input.ContinuationToken = aws.String(nextToken)
 	}
 
-	items := Items{}
-	items.Count = *result.KeyCount
-	if result.NextContinuationToken != nil {
-		items.NextToken = *result.NextContinuationToken
+	maxPerPage := r.URL.Query().Get("max")
+	if maxPerPage != "" {
+		maxKeys, err := strconv.ParseInt(maxPerPage, 10, 64)
+		if err == nil && maxKeys > 0 && maxKeys <= 1000 {
+			input.MaxKeys = aws.Int64(maxKeys)
+		}
 	}
+
+	return input
+}
+
+func (p S3Proxy) MakePageObj(result *s3.ListObjectsV2Output) PageObj {
+	po := PageObj{}
+	po.Count = *result.KeyCount
+	if result.NextContinuationToken != nil {
+		var nextUrl url.URL
+		queryItems := nextUrl.Query()
+
+		queryItems.Add("next", *result.NextContinuationToken)
+		if result.MaxKeys != nil {
+			queryItems.Add("max", strconv.FormatInt(*result.MaxKeys, 10))
+		}
+		nextUrl.RawQuery = queryItems.Encode()
+		po.MoreLink = nextUrl.String()
+	}
+
 	for _, dir := range result.CommonPrefixes {
-		items.Items = append(items.Items, Item{
-			Name:  *dir.Prefix,
+		name := path.Base(*dir.Prefix)
+		dirPath := "./" + name + "/"
+		po.Items = append(po.Items, Item{
+			Url:   dirPath,
+			Name:  name,
 			IsDir: true,
 		})
 	}
@@ -310,7 +326,7 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key strin
 		itemPath := "./" + name
 		size := humanize.Bytes(uint64(*obj.Size))
 		timeAgo := humanize.Time(*obj.LastModified)
-		items.Items = append(items.Items, Item{
+		po.Items = append(po.Items, Item{
 			Name:         name,
 			Key:          *obj.Key,
 			Url:          itemPath,
@@ -320,12 +336,32 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key strin
 		})
 	}
 
+	return po
+}
+
+func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key string) error {
+
+	input := p.ConstructListObjInput(r, key)
+
+	result, err := p.client.ListObjectsV2(&input)
+	if err != nil {
+		p.log.Debug("error in ListObjectsV2",
+			zap.String("bucket", p.Bucket),
+			zap.String("key", key),
+			zap.String("err", err.Error()),
+		)
+		// TODO: map aws errors to caddy errors
+		return caddyhttp.Error(http.StatusNotFound, nil)
+	}
+
+	pageObj := p.MakePageObj(result)
+
 	if r.Header.Get("Content-type") == "application/json" {
 		// Give JSON output of dir
-		err = items.GenerateJson(w)
+		err = pageObj.GenerateJson(w)
 	} else {
 		// Generate html response of dir
-		err = items.GenerateHtml(w, p.dirTemplate)
+		err = pageObj.GenerateHtml(w, p.dirTemplate)
 	}
 
 	if err != nil {
