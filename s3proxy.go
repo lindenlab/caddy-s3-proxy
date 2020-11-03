@@ -297,9 +297,9 @@ func (p S3Proxy) ConstructListObjInput(r *http.Request, key string) s3.ListObjec
 	return input
 }
 
-func (p S3Proxy) MakePageObj(result *s3.ListObjectsV2Output) Items {
-	items := Items{}
-	items.Count = *result.KeyCount
+func (p S3Proxy) MakePageObj(result *s3.ListObjectsV2Output) PageObj {
+	po := PageObj{}
+	po.Count = *result.KeyCount
 	if result.NextContinuationToken != nil {
 		var nextUrl url.URL
 		queryItems := nextUrl.Query()
@@ -309,13 +309,13 @@ func (p S3Proxy) MakePageObj(result *s3.ListObjectsV2Output) Items {
 			queryItems.Add("max", strconv.FormatInt(*result.MaxKeys, 10))
 		}
 		nextUrl.RawQuery = queryItems.Encode()
-		items.MoreLink = nextUrl.String()
+		po.MoreLink = nextUrl.String()
 	}
 
 	for _, dir := range result.CommonPrefixes {
 		name := path.Base(*dir.Prefix)
 		dirPath := "./" + name + "/"
-		items.Items = append(items.Items, Item{
+		po.Items = append(po.Items, Item{
 			Url:   dirPath,
 			Name:  name,
 			IsDir: true,
@@ -326,7 +326,7 @@ func (p S3Proxy) MakePageObj(result *s3.ListObjectsV2Output) Items {
 		itemPath := "./" + name
 		size := humanize.Bytes(uint64(*obj.Size))
 		timeAgo := humanize.Time(*obj.LastModified)
-		items.Items = append(items.Items, Item{
+		po.Items = append(po.Items, Item{
 			Name:         name,
 			Key:          *obj.Key,
 			Url:          itemPath,
@@ -336,7 +336,7 @@ func (p S3Proxy) MakePageObj(result *s3.ListObjectsV2Output) Items {
 		})
 	}
 
-	return items
+	return po
 }
 
 func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key string) error {

@@ -14,7 +14,7 @@ var bufPool = sync.Pool{
 	},
 }
 
-type Items struct {
+type PageObj struct {
 	NextToken string `json:"next_token"`
 	Count     int64  `json:"count"`
 	Items     []Item `json:"items"`
@@ -30,12 +30,13 @@ type Item struct {
 	LastModified string `json:"last_modified"`
 }
 
-func (i Items) GenerateJson(w http.ResponseWriter) error {
+// GenerateJson generates JSON output for the PageObj
+func (po PageObj) GenerateJson(w http.ResponseWriter) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
 
-	err := json.NewEncoder(buf).Encode(i)
+	err := json.NewEncoder(buf).Encode(po)
 	if err != nil {
 		return err
 	}
@@ -45,12 +46,13 @@ func (i Items) GenerateJson(w http.ResponseWriter) error {
 	return err
 }
 
-func (i Items) GenerateHtml(w http.ResponseWriter, template *template.Template) error {
+// GenerateHtml generates html output for the PageObj
+func (po PageObj) GenerateHtml(w http.ResponseWriter, template *template.Template) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
 
-	err := template.Execute(buf, i)
+	err := template.Execute(buf, po)
 	if err != nil {
 		return err
 	}
@@ -65,7 +67,7 @@ const defaultBrowseTemplate = `<!DOCTYPE html>
 <html>
         <body>
                 <ul>
-                {{- range .Items }}
+                {{- range .PageObj }}
                 <li>
                 {{- if .IsDir}}
                 <a href="{{html .Url}}">{{html .Name}}</a>
