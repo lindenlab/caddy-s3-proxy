@@ -36,8 +36,8 @@ The Caddyfile directive would look something like this:
 		root   <key prefix>
 		enable_put
 		enable_delete
-		error_page <http status> <S3 key to a custom error page for this http status>
-		error_page <S3 key to a default error page>
+		errors <http status> <S3 key to a custom error page for this http status>
+		errors <S3 key to a default error page>
 		browse [<path to template>]
 	}
 ```
@@ -45,13 +45,13 @@ The Caddyfile directive would look something like this:
 |  option   |  type  |  required | default | help |
 |-----------|:------:|-----------|---------|------|
 | bucket              | string   | yes |                          | S3 bucket name |
-| region              | string   | no  |  env AWS_REGION          | S3 region - if not give in the Caddyfile then AWS_REGION env var must be set.|
+| region              | string   | yes-ish  |  env AWS_REGION          | S3 region - if not give in the Caddyfile then AWS_REGION env var must be set.|
 | endpoint            | string   | no  |  aws default             | S3 hostname |
 | index               | string[] | no  |  [index.html, index.txt] | Index files to look up for dir path |
 | root                | string   | no  |    | Set a "prefix" to be added to key |
-| enable_put          | bool     | yes | false   | Allow PUT method to be sent through proxy |
-| enable_delete       | bool     | yes | false   | Allow DELETE method to be sent through proxy |
-| error_page          | [int, ] string | no |  | Custom error page |
+| enable_put          | bool     | no  | false   | Allow PUT method to be sent through proxy |
+| enable_delete       | bool     | no  | false   | Allow DELETE method to be sent through proxy |
+| errors              | [int, ] string | no |  | Custom error page or use "pass_through" to write nothing for errors. |
 | browse              | [string] | no |  | Turns on a directory view for partial keys, an optional path to a template can be given |
 
 ## Credentials

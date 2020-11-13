@@ -8,11 +8,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"path"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -22,7 +20,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"github.com/dustin/go-humanize"
 	"go.uber.org/zap"
 )
 
@@ -71,10 +68,10 @@ type S3Proxy struct {
 	// Path to a template file to use for generating browse dir html page
 	BrowseTemplate string
 
-	// Mapping of HTTP error status to S3 keys.
+	// Mapping of HTTP error status to S3 keys or pass through option.
 	ErrorPages map[int]string `json:"error_pages,omitempty"`
 
-	// S3 key to a default error page.
+	// S3 key to a default error page or pass through option.
 	DefaultErrorPage string `json:"default_error_page,omitempty"`
 
 	client      *s3.S3
@@ -270,75 +267,6 @@ func (p S3Proxy) DeleteHandler(w http.ResponseWriter, r *http.Request, key strin
 	return nil
 }
 
-func (p S3Proxy) ConstructListObjInput(r *http.Request, key string) s3.ListObjectsV2Input {
-	// We should only get here if the path ends in a /, however, when we make the
-	//call to ListObjects no / should be there
-	prefix := strings.TrimPrefix(key, "/")
-
-	input := s3.ListObjectsV2Input{
-		Bucket:    aws.String(p.Bucket),
-		Prefix:    aws.String(prefix),
-		Delimiter: aws.String("/"),
-	}
-
-	nextToken := r.URL.Query().Get("next")
-	if nextToken != "" {
-		input.ContinuationToken = aws.String(nextToken)
-	}
-
-	maxPerPage := r.URL.Query().Get("max")
-	if maxPerPage != "" {
-		maxKeys, err := strconv.ParseInt(maxPerPage, 10, 64)
-		if err == nil && maxKeys > 0 && maxKeys <= 1000 {
-			input.MaxKeys = aws.Int64(maxKeys)
-		}
-	}
-
-	return input
-}
-
-func (p S3Proxy) MakePageObj(result *s3.ListObjectsV2Output) PageObj {
-	po := PageObj{}
-	po.Count = *result.KeyCount
-	if result.NextContinuationToken != nil {
-		var nextUrl url.URL
-		queryItems := nextUrl.Query()
-
-		queryItems.Add("next", *result.NextContinuationToken)
-		if result.MaxKeys != nil {
-			queryItems.Add("max", strconv.FormatInt(*result.MaxKeys, 10))
-		}
-		nextUrl.RawQuery = queryItems.Encode()
-		po.MoreLink = nextUrl.String()
-	}
-
-	for _, dir := range result.CommonPrefixes {
-		name := path.Base(*dir.Prefix)
-		dirPath := "./" + name + "/"
-		po.Items = append(po.Items, Item{
-			Url:   dirPath,
-			Name:  name,
-			IsDir: true,
-		})
-	}
-	for _, obj := range result.Contents {
-		name := path.Base(*obj.Key)
-		itemPath := "./" + name
-		size := humanize.Bytes(uint64(*obj.Size))
-		timeAgo := humanize.Time(*obj.LastModified)
-		po.Items = append(po.Items, Item{
-			Name:         name,
-			Key:          *obj.Key,
-			Url:          itemPath,
-			Size:         size,
-			LastModified: timeAgo,
-			IsDir:        false,
-		})
-	}
-
-	return po
-}
-
 func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key string) error {
 
 	input := p.ConstructListObjInput(r, key)
@@ -415,6 +343,9 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 
 	// If file is hidden - return 404
 	if fileHidden(fullPath, p.Hide) {
+		if p.ShouldPassThrough() {
+			return nil
+		}
 		return caddyhttp.Error(http.StatusNotFound, nil)
 	}
 
@@ -472,18 +403,24 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 					zap.String("key", fullPath),
 					zap.String("err", aerr.Error()),
 				)
+				if p.ShouldPassThrough() {
+					return nil
+				}
 				return caddyhttp.Error(http.StatusNotFound, aerr)
 			default:
-				if code, ok := awsErrorCodesMapping[aerr.Code()]; ok {
-					return caddyhttp.Error(code, nil)
-				}
-
 				// return 403 maybe?  Why else would it fail?
 				p.log.Error("failed to get object",
 					zap.String("bucket", p.Bucket),
 					zap.String("key", fullPath),
 					zap.String("err", aerr.Error()),
 				)
+
+				if p.ShouldPassThrough() {
+					return nil
+				}
+				if code, ok := awsErrorCodesMapping[aerr.Code()]; ok {
+					return caddyhttp.Error(code, nil)
+				}
 
 				return caddyhttp.Error(http.StatusForbidden, err)
 			}
@@ -494,11 +431,22 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 				zap.String("err", err.Error()),
 			)
 
+			if p.ShouldPassThrough() {
+				return nil
+			}
 			return err
 		}
 	}
 
 	return p.writeResponseFromGetObject(w, obj)
+}
+
+func (p S3Proxy) ShouldPassThrough() bool {
+	if strings.ToLower(p.DefaultErrorPage) == "pass_through" {
+		return true
+	}
+
+	return false
 }
 
 func (p S3Proxy) wrapHTTPErrors(w http.ResponseWriter, parentError error) error {

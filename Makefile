@@ -1,4 +1,5 @@
 export GO111MODULE=on
+VERSION := $(shell cat Version)
 
 .PHONY: build
 build: caddy
@@ -36,4 +37,3 @@ clean:  ## Delete any generated files
 .PHONY: version
 version:  ## Show the version the Makefile will build
 	@echo ${VERSION}
-	@echo client version: $(shell cat client/Version)
