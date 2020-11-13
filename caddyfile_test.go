@@ -39,7 +39,7 @@ func TestParseCaddyfile(t *testing.T) {
 				bucket ""
 			}`,
 			shouldErr: true,
-			errString: "Testfile:2 - Error during parsing: bucket name must be set and not empty",
+			errString: "Testfile:2 - Error during parsing: bucket must be set and not empty",
 		},
 		testCase{
 			desc: "bucket missing",
@@ -47,7 +47,7 @@ func TestParseCaddyfile(t *testing.T) {
 				region foo
 			}`,
 			shouldErr: true,
-			errString: "Testfile:3 - Error during parsing: bucket name must be set and not empty",
+			errString: "Testfile:3 - Error during parsing: bucket must be set and not empty",
 		},
 		testCase{
 			desc: "endpoint bad # args",

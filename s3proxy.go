@@ -442,11 +442,7 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 }
 
 func (p S3Proxy) ShouldPassThrough() bool {
-	if strings.ToLower(p.DefaultErrorPage) == "pass_through" {
-		return true
-	}
-
-	return false
+	return strings.ToLower(p.DefaultErrorPage) == "pass_through"
 }
 
 func (p S3Proxy) wrapHTTPErrors(w http.ResponseWriter, parentError error) error {
