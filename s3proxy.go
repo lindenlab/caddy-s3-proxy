@@ -333,21 +333,9 @@ func (p S3Proxy) serveErrorPage(w http.ResponseWriter, s3Key string) error {
 }
 
 func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	return p.wrapHTTPErrors(w, p.doServeHTTP(w, r, next))
-}
-
-func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
 	fullPath := joinPath(repl.ReplaceAll(p.Root, ""), r.URL.Path)
-
-	// If file is hidden - return 404
-	if fileHidden(fullPath, p.Hide) {
-		if p.ShouldPassThrough() {
-			return nil
-		}
-		return caddyhttp.Error(http.StatusNotFound, nil)
-	}
 
 	switch r.Method {
 	case http.MethodGet:
@@ -359,6 +347,52 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 	default:
 		err := errors.New("method not allowed")
 		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+	}
+
+	// Get base error for GetMethod - then handle errors directive options
+	err := p.GetHandler(w, r, fullPath)
+	if err == nil {
+		return nil
+	}
+
+	caddyErr, isCaddyErr := err.(caddyhttp.HandlerError)
+	if !isCaddyErr {
+		caddyErr = caddyhttp.Error(http.StatusInternalServerError, err)
+	}
+
+	// process errors directive
+	var s3Key string
+	if errorPageS3Key, hasErrorPageForCode := p.ErrorPages[caddyErr.StatusCode]; hasErrorPageForCode {
+		s3Key = errorPageS3Key
+	} else if p.DefaultErrorPage != "" {
+		s3Key = p.DefaultErrorPage
+	}
+
+	if caddyErr.StatusCode == http.StatusNotFound && s3Key == "pass_through" {
+		// Do pass through option
+		return next.ServeHTTP(w, r)
+	}
+
+	if caddyErr.StatusCode != 0 {
+		w.WriteHeader(caddyErr.StatusCode)
+	}
+	if s3Key != "" {
+		if err := p.serveErrorPage(w, s3Key); err != nil {
+			// Just log the error as we don't want to swallow the parent error.
+			p.log.Error("error serving error page",
+				zap.String("bucket", p.Bucket),
+				zap.String("key", s3Key),
+				zap.String("err", err.Error()),
+			)
+		}
+	}
+	return caddyErr
+}
+
+func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath string) error {
+	// If file is hidden - return 404
+	if fileHidden(fullPath, p.Hide) {
+		return caddyhttp.Error(http.StatusNotFound, nil)
 	}
 
 	isDir := strings.HasSuffix(fullPath, "/")
@@ -403,9 +437,6 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 					zap.String("key", fullPath),
 					zap.String("err", aerr.Error()),
 				)
-				if p.ShouldPassThrough() {
-					return nil
-				}
 				return caddyhttp.Error(http.StatusNotFound, aerr)
 			default:
 				// return 403 maybe?  Why else would it fail?
@@ -415,9 +446,6 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 					zap.String("err", aerr.Error()),
 				)
 
-				if p.ShouldPassThrough() {
-					return nil
-				}
 				if code, ok := awsErrorCodesMapping[aerr.Code()]; ok {
 					return caddyhttp.Error(code, nil)
 				}
@@ -431,54 +459,12 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 				zap.String("err", err.Error()),
 			)
 
-			if p.ShouldPassThrough() {
-				return nil
-			}
+			// TODO: needs to be caddyError
 			return err
 		}
 	}
 
 	return p.writeResponseFromGetObject(w, obj)
-}
-
-func (p S3Proxy) ShouldPassThrough() bool {
-	return strings.ToLower(p.DefaultErrorPage) == "pass_through"
-}
-
-func (p S3Proxy) wrapHTTPErrors(w http.ResponseWriter, parentError error) error {
-	if parentError == nil {
-		return nil
-	}
-
-	caddyErr, isCaddyErr := parentError.(caddyhttp.HandlerError)
-
-	if !isCaddyErr {
-		caddyErr = caddyhttp.Error(http.StatusInternalServerError, parentError)
-	}
-
-	if caddyErr.StatusCode != 0 {
-		w.WriteHeader(caddyErr.StatusCode)
-	}
-
-	var s3Key string
-	if errorPageS3Key, hasErrorPageForCode := p.ErrorPages[caddyErr.StatusCode]; hasErrorPageForCode {
-		s3Key = errorPageS3Key
-	} else if p.DefaultErrorPage != "" {
-		s3Key = p.DefaultErrorPage
-	}
-
-	if s3Key != "" {
-		if err := p.serveErrorPage(w, s3Key); err != nil {
-			// Just log the error as we don't want to swallow the parent error.
-			p.log.Error("error serving error page",
-				zap.String("bucket", p.Bucket),
-				zap.String("key", s3Key),
-				zap.String("err", err.Error()),
-			)
-		}
-	}
-
-	return caddyErr
 }
 
 func setStrHeader(w http.ResponseWriter, key string, value *string) {

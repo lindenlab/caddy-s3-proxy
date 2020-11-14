@@ -71,6 +71,12 @@ The methods include (and are looked for in this order):
 For much more detail on the various options for setting AWS credentials see here:
 https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html
 
+## Handling errors
+
+When accessing S3 you may get errors like keyNotFound, bucket does not exist, or ACL permissions problems.  By default
+this proxy will map those errors to an http error.
+* 
+
 ## Examples you can play with
 
 In the examples directory is an example of using the s3proxy with localstack.
