@@ -8,11 +8,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"path"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -22,7 +20,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
-	"github.com/dustin/go-humanize"
 	"go.uber.org/zap"
 )
 
@@ -71,10 +68,10 @@ type S3Proxy struct {
 	// Path to a template file to use for generating browse dir html page
 	BrowseTemplate string
 
-	// Mapping of HTTP error status to S3 keys.
+	// Mapping of HTTP error status to S3 keys or pass through option.
 	ErrorPages map[int]string `json:"error_pages,omitempty"`
 
-	// S3 key to a default error page.
+	// S3 key to a default error page or pass through option.
 	DefaultErrorPage string `json:"default_error_page,omitempty"`
 
 	client      *s3.S3
@@ -223,7 +220,7 @@ func (p S3Proxy) PutHandler(w http.ResponseWriter, r *http.Request, key string) 
 		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
 	}
 
-	// The request gives us r.Body a ReadCloser.  However, Put need a ReadSeeker.
+	// The request gives us r.Body a ReadCloser.  However, Put needs a ReadSeeker.
 	// So we need to read the entire object in memory and create the ReadSeeker.
 	// TODO: this will not work well for very large files - will run out of memory
 	buf, err := ioutil.ReadAll(r.Body)
@@ -268,75 +265,6 @@ func (p S3Proxy) DeleteHandler(w http.ResponseWriter, r *http.Request, key strin
 	}
 
 	return nil
-}
-
-func (p S3Proxy) ConstructListObjInput(r *http.Request, key string) s3.ListObjectsV2Input {
-	// We should only get here if the path ends in a /, however, when we make the
-	//call to ListObjects no / should be there
-	prefix := strings.TrimPrefix(key, "/")
-
-	input := s3.ListObjectsV2Input{
-		Bucket:    aws.String(p.Bucket),
-		Prefix:    aws.String(prefix),
-		Delimiter: aws.String("/"),
-	}
-
-	nextToken := r.URL.Query().Get("next")
-	if nextToken != "" {
-		input.ContinuationToken = aws.String(nextToken)
-	}
-
-	maxPerPage := r.URL.Query().Get("max")
-	if maxPerPage != "" {
-		maxKeys, err := strconv.ParseInt(maxPerPage, 10, 64)
-		if err == nil && maxKeys > 0 && maxKeys <= 1000 {
-			input.MaxKeys = aws.Int64(maxKeys)
-		}
-	}
-
-	return input
-}
-
-func (p S3Proxy) MakePageObj(result *s3.ListObjectsV2Output) PageObj {
-	po := PageObj{}
-	po.Count = *result.KeyCount
-	if result.NextContinuationToken != nil {
-		var nextUrl url.URL
-		queryItems := nextUrl.Query()
-
-		queryItems.Add("next", *result.NextContinuationToken)
-		if result.MaxKeys != nil {
-			queryItems.Add("max", strconv.FormatInt(*result.MaxKeys, 10))
-		}
-		nextUrl.RawQuery = queryItems.Encode()
-		po.MoreLink = nextUrl.String()
-	}
-
-	for _, dir := range result.CommonPrefixes {
-		name := path.Base(*dir.Prefix)
-		dirPath := "./" + name + "/"
-		po.Items = append(po.Items, Item{
-			Url:   dirPath,
-			Name:  name,
-			IsDir: true,
-		})
-	}
-	for _, obj := range result.Contents {
-		name := path.Base(*obj.Key)
-		itemPath := "./" + name
-		size := humanize.Bytes(uint64(*obj.Size))
-		timeAgo := humanize.Time(*obj.LastModified)
-		po.Items = append(po.Items, Item{
-			Name:         name,
-			Key:          *obj.Key,
-			Url:          itemPath,
-			Size:         size,
-			LastModified: timeAgo,
-			IsDir:        false,
-		})
-	}
-
-	return po
 }
 
 func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key string) error {
@@ -404,30 +332,83 @@ func (p S3Proxy) serveErrorPage(w http.ResponseWriter, s3Key string) error {
 	return nil
 }
 
+// ServeHTTP implements the main entry point for a request for the caddyhttp.Handler interface.
 func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	return p.wrapHTTPErrors(w, p.doServeHTTP(w, r, next))
-}
-
-func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
 	fullPath := joinPath(repl.ReplaceAll(p.Root, ""), r.URL.Path)
 
+	var err error
+	switch r.Method {
+	case http.MethodGet:
+		err = p.GetHandler(w, r, fullPath)
+	case http.MethodPut:
+		err = p.PutHandler(w, r, fullPath)
+	case http.MethodDelete:
+		err = p.DeleteHandler(w, r, fullPath)
+	default:
+		err = caddyhttp.Error(http.StatusMethodNotAllowed, errors.New("method not allowed"))
+	}
+	if err == nil {
+		// Success!
+		return nil
+	}
+
+	// Make the err a caddyErr if it is not already
+	caddyErr, isCaddyErr := err.(caddyhttp.HandlerError)
+	if !isCaddyErr {
+		caddyErr = caddyhttp.Error(http.StatusInternalServerError, err)
+	}
+
+	// If non OK status code - WriteHeader - except for GET method, where we still need to process more
+	if r.Method != http.MethodGet {
+		if caddyErr.StatusCode != 0 {
+			w.WriteHeader(caddyErr.StatusCode)
+		}
+		return caddyErr
+	}
+
+	// process errors directive
+	doPassThrough, doS3ErrorPage, s3Key := p.determineErrorsAction(caddyErr.StatusCode)
+	if doPassThrough {
+		return next.ServeHTTP(w, r)
+	}
+
+	if caddyErr.StatusCode != 0 {
+		w.WriteHeader(caddyErr.StatusCode)
+	}
+	if doS3ErrorPage {
+		if err := p.serveErrorPage(w, s3Key); err != nil {
+			// Just log the error as we don't want to swallow the parent error.
+			p.log.Error("error serving error page",
+				zap.String("bucket", p.Bucket),
+				zap.String("key", s3Key),
+				zap.String("err", err.Error()),
+			)
+		}
+	}
+	return caddyErr
+}
+
+func (p S3Proxy) determineErrorsAction(statusCode int) (bool, bool, string) {
+	var s3Key string
+	if errorPageS3Key, hasErrorPageForCode := p.ErrorPages[statusCode]; hasErrorPageForCode {
+		s3Key = errorPageS3Key
+	} else if p.DefaultErrorPage != "" {
+		s3Key = p.DefaultErrorPage
+	}
+
+	if strings.ToLower(s3Key) == "pass_through" {
+		return true, false, ""
+	}
+
+	return false, s3Key != "", s3Key
+}
+
+func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath string) error {
 	// If file is hidden - return 404
 	if fileHidden(fullPath, p.Hide) {
 		return caddyhttp.Error(http.StatusNotFound, nil)
-	}
-
-	switch r.Method {
-	case http.MethodGet:
-		break
-	case http.MethodPut:
-		return p.PutHandler(w, r, fullPath)
-	case http.MethodDelete:
-		return p.DeleteHandler(w, r, fullPath)
-	default:
-		err := errors.New("method not allowed")
-		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
 	}
 
 	isDir := strings.HasSuffix(fullPath, "/")
@@ -474,16 +455,16 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 				)
 				return caddyhttp.Error(http.StatusNotFound, aerr)
 			default:
-				if code, ok := awsErrorCodesMapping[aerr.Code()]; ok {
-					return caddyhttp.Error(code, nil)
-				}
-
 				// return 403 maybe?  Why else would it fail?
 				p.log.Error("failed to get object",
 					zap.String("bucket", p.Bucket),
 					zap.String("key", fullPath),
 					zap.String("err", aerr.Error()),
 				)
+
+				if code, ok := awsErrorCodesMapping[aerr.Code()]; ok {
+					return caddyhttp.Error(code, nil)
+				}
 
 				return caddyhttp.Error(http.StatusForbidden, err)
 			}
@@ -494,47 +475,12 @@ func (p S3Proxy) doServeHTTP(w http.ResponseWriter, r *http.Request, next caddyh
 				zap.String("err", err.Error()),
 			)
 
+			// TODO: needs to be caddyError
 			return err
 		}
 	}
 
 	return p.writeResponseFromGetObject(w, obj)
-}
-
-func (p S3Proxy) wrapHTTPErrors(w http.ResponseWriter, parentError error) error {
-	if parentError == nil {
-		return nil
-	}
-
-	caddyErr, isCaddyErr := parentError.(caddyhttp.HandlerError)
-
-	if !isCaddyErr {
-		caddyErr = caddyhttp.Error(http.StatusInternalServerError, parentError)
-	}
-
-	if caddyErr.StatusCode != 0 {
-		w.WriteHeader(caddyErr.StatusCode)
-	}
-
-	var s3Key string
-	if errorPageS3Key, hasErrorPageForCode := p.ErrorPages[caddyErr.StatusCode]; hasErrorPageForCode {
-		s3Key = errorPageS3Key
-	} else if p.DefaultErrorPage != "" {
-		s3Key = p.DefaultErrorPage
-	}
-
-	if s3Key != "" {
-		if err := p.serveErrorPage(w, s3Key); err != nil {
-			// Just log the error as we don't want to swallow the parent error.
-			p.log.Error("error serving error page",
-				zap.String("bucket", p.Bucket),
-				zap.String("key", s3Key),
-				zap.String("err", err.Error()),
-			)
-		}
-	}
-
-	return caddyErr
 }
 
 func setStrHeader(w http.ResponseWriter, key string, value *string) {

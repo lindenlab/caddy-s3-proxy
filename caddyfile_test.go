@@ -39,7 +39,7 @@ func TestParseCaddyfile(t *testing.T) {
 				bucket ""
 			}`,
 			shouldErr: true,
-			errString: "Testfile:2 - Error during parsing: bucket name must be set and not empty",
+			errString: "Testfile:2 - Error during parsing: bucket must be set and not empty",
 		},
 		testCase{
 			desc: "bucket missing",
@@ -47,7 +47,7 @@ func TestParseCaddyfile(t *testing.T) {
 				region foo
 			}`,
 			shouldErr: true,
-			errString: "Testfile:3 - Error during parsing: bucket name must be set and not empty",
+			errString: "Testfile:3 - Error during parsing: bucket must be set and not empty",
 		},
 		testCase{
 			desc: "endpoint bad # args",
@@ -74,19 +74,19 @@ func TestParseCaddyfile(t *testing.T) {
 			errString: "Testfile:2 - Error during parsing: Wrong argument count or unexpected line ending after 'one'",
 		},
 		testCase{
-			desc: "errors on invalid HTTP status for error_page",
+			desc: "errors on invalid HTTP status for errors",
 			input: `s3proxy {
 				bucket mybucket
-				error_page invalid "path/to/404.html"
+				errors invalid "path/to/404.html"
 			}`,
 			shouldErr: true,
 			errString: "Testfile:3 - Error during parsing: 'invalid' is not a valid HTTP status code",
 		},
 		testCase{
-			desc: "errors on too many arguments for error_page",
+			desc: "errors on too many arguments for errors",
 			input: `s3proxy {
 				bucket mybucket
-				error_page 403 "path/to/404.html" "what's this?"
+				errors 403 "path/to/404.html" "what's this?"
 			}`,
 			shouldErr: true,
 			errString: "Testfile:3 - Error during parsing: Wrong argument count or unexpected line ending after 'what's this?'",
@@ -133,9 +133,9 @@ func TestParseCaddyfile(t *testing.T) {
 			desc: "enable error pages",
 			input: `s3proxy {
 				bucket mybucket
-				error_page 404 "path/to/404.html"
-				error_page 403 "path/to/403.html"
-				error_page "path/to/default_error.html"
+				errors 404 "path/to/404.html"
+				errors 403 "path/to/403.html"
+				errors "path/to/default_error.html"
 			}`,
 			shouldErr: false,
 			obj: S3Proxy{

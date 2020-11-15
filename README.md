@@ -36,8 +36,8 @@ The Caddyfile directive would look something like this:
 		root   <key prefix>
 		enable_put
 		enable_delete
-		error_page <http status> <S3 key to a custom error page for this http status>
-		error_page <S3 key to a default error page>
+		errors <http status> <S3 key to a custom error page for this http status>
+		errors <S3 key to a default error page>
 		browse [<path to template>]
 	}
 ```
@@ -45,13 +45,13 @@ The Caddyfile directive would look something like this:
 |  option   |  type  |  required | default | help |
 |-----------|:------:|-----------|---------|------|
 | bucket              | string   | yes |                          | S3 bucket name |
-| region              | string   | no  |  env AWS_REGION          | S3 region - if not give in the Caddyfile then AWS_REGION env var must be set.|
+| region              | string   | yes-ish  |  env AWS_REGION          | S3 region - if not give in the Caddyfile then AWS_REGION env var must be set.|
 | endpoint            | string   | no  |  aws default             | S3 hostname |
 | index               | string[] | no  |  [index.html, index.txt] | Index files to look up for dir path |
 | root                | string   | no  |    | Set a "prefix" to be added to key |
-| enable_put          | bool     | yes | false   | Allow PUT method to be sent through proxy |
-| enable_delete       | bool     | yes | false   | Allow DELETE method to be sent through proxy |
-| error_page          | [int, ] string | no |  | Custom error page |
+| enable_put          | bool     | no  | false   | Allow PUT method to be sent through proxy |
+| enable_delete       | bool     | no  | false   | Allow DELETE method to be sent through proxy |
+| errors              | [int, ] string | no |  | Custom error page or use "pass_through" to write nothing for errors. |
 | browse              | [string] | no |  | Turns on a directory view for partial keys, an optional path to a template can be given |
 
 ## Credentials
@@ -70,6 +70,29 @@ The methods include (and are looked for in this order):
 
 For much more detail on the various options for setting AWS credentials see here:
 https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html
+
+## Handling errors
+
+When accessing S3 you may get errors like keyNotFound, bucket does not exist, or ACL permissions problems.  By default
+this proxy will map those errors to an http error - like 404, 403 or 500.
+
+However, with the `errors` directive you have a couple of more options.  You can specify a S3 key that may contain HTML
+to display rather than just returning an error code.  This can be done for a specific error or all errors.  For example,
+```
+errors 403 /key/path/to/permissionerr.html
+errors /key/path/to/defaulterr.html
+```
+This will display the page permissionerr.html for any 403 errors and defaulterr.html for all other errors.
+
+There is a special option to "pass through" on an error and let the next Caddy handler deal with the request.  For example,
+```
+errors 404 pass_through
+errors /key/path/to/defaulterr.html
+```
+
+Will pass 404 errors onto the next handler.  All other errors will show the page defaulterr.html.
+
+Note: The `errors` direction only applies to GET method requests.  PUT and DELETE errors just return the code.
 
 ## Examples you can play with
 

@@ -24,7 +24,7 @@ func init() {
 //        endpoint <alternative endpoint>
 //        enable_put
 //        enable_delete
-//        error_page [<http code>] <s3 key to error page>
+//        errors [<http code>] [<s3 key to error page>|pass_through]
 //        browse [<template file>]
 //    }
 //
@@ -81,7 +81,7 @@ parseLoop:
 			if len(args) > 1 {
 				return nil, h.ArgErr()
 			}
-		case "error_page":
+		case "error_page", "errors":
 			if b.ErrorPages == nil {
 				b.ErrorPages = make(map[int]string)
 			}
@@ -91,14 +91,14 @@ parseLoop:
 				b.DefaultErrorPage = args[0]
 			} else if len(args) == 2 {
 				httpStatusStr := args[0]
-				s3Key := args[1]
+				s3KeyOrPassThrough := args[1]
 
 				httpStatus, err := strconv.Atoi(httpStatusStr)
 				if err != nil {
 					return nil, h.Errf("'%s' is not a valid HTTP status code", httpStatusStr)
 				}
 
-				b.ErrorPages[httpStatus] = s3Key
+				b.ErrorPages[httpStatus] = s3KeyOrPassThrough
 			} else {
 				return nil, h.ArgErr()
 			}
@@ -107,7 +107,7 @@ parseLoop:
 		}
 	}
 	if b.Bucket == "" {
-		return nil, h.Err("bucket name must be set and not empty")
+		return nil, h.Err("bucket must be set and not empty")
 	}
 
 	return &b, nil
