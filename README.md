@@ -74,8 +74,25 @@ https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html
 ## Handling errors
 
 When accessing S3 you may get errors like keyNotFound, bucket does not exist, or ACL permissions problems.  By default
-this proxy will map those errors to an http error.
-* 
+this proxy will map those errors to an http error - like 404, 403 or 500.
+
+However, with the `errors` directive you have a couple of more options.  You can specify a S3 key that may contain HTML
+to display rather than just returning an error code.  This can be done for a specific error or all errors.  For example,
+```
+errors 403 /key/path/to/permissionerr.html
+errors /key/path/to/defaulterr.html
+```
+This will display the page permissionerr.html for any 403 errors and defaulterr.html for all other errors.
+
+There is a special option to "pass through" on an error and let the next Caddy handler deal with the request.  For example,
+```
+errors 404 pass_through
+errors /key/path/to/defaulterr.html
+```
+
+Will pass 404 errors onto the next handler.  All other errors will show the page defaulterr.html.
+
+Note: The `errors` direction only applies to GET method requests.  PUT and DELETE errors just return the code.
 
 ## Examples you can play with
 
