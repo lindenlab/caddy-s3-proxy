@@ -342,16 +342,12 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	switch r.Method {
 	case http.MethodGet:
 		err = p.GetHandler(w, r, fullPath)
-		break
 	case http.MethodPut:
 		err = p.PutHandler(w, r, fullPath)
-		break
 	case http.MethodDelete:
 		err = p.DeleteHandler(w, r, fullPath)
-		break
 	default:
 		err = caddyhttp.Error(http.StatusMethodNotAllowed, errors.New("method not allowed"))
-		break
 	}
 	if err == nil {
 		// Success!
