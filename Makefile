@@ -1,5 +1,6 @@
 export GO111MODULE=on
 VERSION := $(shell cat Version)
+COVER_TARGET ?= 30
 
 .PHONY: build
 build: caddy
@@ -15,6 +16,13 @@ docker: caddy  ## build a docker image for caddy with the s3proxy
 .PHONY: test
 test:  ## Run go test on source base
 	@go test --race
+
+.PHONY: cover
+cover:  ## Generate test coverage results
+	@go test -gcflags=-l --covermode=count -coverprofile cover.profile ${PKGS}
+	@go tool cover -html cover.profile -o cover.html
+	@go tool cover -func cover.profile -o cover.func
+	@tail -n 1 cover.func | awk '{if (int($$3) >= ${COVER_TARGET}) {print "Coverage good: " $$3} else {print "Coverage is less than ${COVER_TARGET}%: " $$3; exit 1}}'
 
 .PHONY: lint
 lint:  ## Run golint on source base

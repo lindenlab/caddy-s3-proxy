@@ -23,10 +23,9 @@ var bufPool = sync.Pool{
 }
 
 type PageObj struct {
-	NextToken string `json:"next_token"`
-	Count     int64  `json:"count"`
-	Items     []Item `json:"items"`
-	MoreLink  string `json:"more"`
+	Count    int64  `json:"count"`
+	Items    []Item `json:"items"`
+	MoreLink string `json:"more"`
 }
 
 type Item struct {
