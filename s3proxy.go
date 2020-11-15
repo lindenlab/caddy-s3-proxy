@@ -338,27 +338,38 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 
 	fullPath := joinPath(repl.ReplaceAll(p.Root, ""), r.URL.Path)
 
+	var err error
 	switch r.Method {
 	case http.MethodGet:
+		err = p.GetHandler(w, r, fullPath)
 		break
 	case http.MethodPut:
-		return p.PutHandler(w, r, fullPath)
+		err = p.PutHandler(w, r, fullPath)
+		break
 	case http.MethodDelete:
-		return p.DeleteHandler(w, r, fullPath)
+		err = p.DeleteHandler(w, r, fullPath)
+		break
 	default:
-		err := errors.New("method not allowed")
-		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
+		err = caddyhttp.Error(http.StatusMethodNotAllowed, errors.New("method not allowed"))
+		break
 	}
-
-	// Get base error for GetMethod - then handle errors directive options
-	err := p.GetHandler(w, r, fullPath)
 	if err == nil {
+		// Success!
 		return nil
 	}
 
+	// Make the err a caddyErr if it is not already
 	caddyErr, isCaddyErr := err.(caddyhttp.HandlerError)
 	if !isCaddyErr {
 		caddyErr = caddyhttp.Error(http.StatusInternalServerError, err)
+	}
+
+	// If non OK status code - WriteHeader - except for GET method, where we still need to process more
+	if r.Method != http.MethodGet {
+		if caddyErr.StatusCode != 0 {
+			w.WriteHeader(caddyErr.StatusCode)
+		}
+		return caddyErr
 	}
 
 	// process errors directive
