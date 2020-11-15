@@ -220,7 +220,7 @@ func (p S3Proxy) PutHandler(w http.ResponseWriter, r *http.Request, key string) 
 		return caddyhttp.Error(http.StatusMethodNotAllowed, err)
 	}
 
-	// The request gives us r.Body a ReadCloser.  However, Put need a ReadSeeker.
+	// The request gives us r.Body a ReadCloser.  However, Put needs a ReadSeeker.
 	// So we need to read the entire object in memory and create the ReadSeeker.
 	// TODO: this will not work well for very large files - will run out of memory
 	buf, err := ioutil.ReadAll(r.Body)
@@ -332,6 +332,7 @@ func (p S3Proxy) serveErrorPage(w http.ResponseWriter, s3Key string) error {
 	return nil
 }
 
+// ServeHTTP implements the main entry point for a request for the caddyhttp.Handler interface.
 func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
 
@@ -361,22 +362,15 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	}
 
 	// process errors directive
-	var s3Key string
-	if errorPageS3Key, hasErrorPageForCode := p.ErrorPages[caddyErr.StatusCode]; hasErrorPageForCode {
-		s3Key = errorPageS3Key
-	} else if p.DefaultErrorPage != "" {
-		s3Key = p.DefaultErrorPage
-	}
-
-	if caddyErr.StatusCode == http.StatusNotFound && s3Key == "pass_through" {
-		// Do pass through option
+	doPassThrough, doS3ErrorPage, s3Key := p.determineErrorsAction(caddyErr.StatusCode)
+	if doPassThrough {
 		return next.ServeHTTP(w, r)
 	}
 
 	if caddyErr.StatusCode != 0 {
 		w.WriteHeader(caddyErr.StatusCode)
 	}
-	if s3Key != "" {
+	if doS3ErrorPage {
 		if err := p.serveErrorPage(w, s3Key); err != nil {
 			// Just log the error as we don't want to swallow the parent error.
 			p.log.Error("error serving error page",
@@ -387,6 +381,21 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		}
 	}
 	return caddyErr
+}
+
+func (p S3Proxy) determineErrorsAction(statusCode int) (bool, bool, string) {
+	var s3Key string
+	if errorPageS3Key, hasErrorPageForCode := p.ErrorPages[statusCode]; hasErrorPageForCode {
+		s3Key = errorPageS3Key
+	} else if p.DefaultErrorPage != "" {
+		s3Key = p.DefaultErrorPage
+	}
+
+	if strings.ToLower(s3Key) == "pass_through" {
+		return true, false, ""
+	}
+
+	return false, s3Key != "", s3Key
 }
 
 func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath string) error {

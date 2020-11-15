@@ -57,7 +57,7 @@ func (po PageObj) GenerateJson(w http.ResponseWriter) error {
 func (p S3Proxy) ConstructListObjInput(r *http.Request, key string) s3.ListObjectsV2Input {
 	// We should only get here if the path ends in a /, however, when we make the
 	//call to ListObjects no / should be there
-	prefix := strings.TrimPrefix(key, "/")
+	prefix := strings.TrimSuffix(key, "/")
 
 	input := s3.ListObjectsV2Input{
 		Bucket:    aws.String(p.Bucket),
