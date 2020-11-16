@@ -419,6 +419,15 @@ func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath str
 		for _, indexPage := range p.IndexNames {
 			indexPath := path.Join(fullPath, indexPage)
 			obj, err = p.getS3Object(p.Bucket, indexPath, r.Header)
+
+			if err != nil {
+				p.log.Warn("failed to get object",
+					zap.String("bucket", p.Bucket),
+					zap.String("key", fullPath),
+					zap.String("err", err.Error()),
+				)
+			}
+
 			if err == nil {
 				// We found an index!
 				isDir = false
