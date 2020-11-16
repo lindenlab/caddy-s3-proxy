@@ -301,12 +301,14 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key strin
 
 func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetObjectOutput) error {
 	// Copy headers from AWS response to our response
+	setStrHeader(w, "Cache-Control", obj.CacheControl)
 	setStrHeader(w, "Content-Disposition", obj.ContentDisposition)
 	setStrHeader(w, "Content-Encoding", obj.ContentEncoding)
 	setStrHeader(w, "Content-Language", obj.ContentLanguage)
 	setStrHeader(w, "Content-Range", obj.ContentRange)
 	setStrHeader(w, "Content-Type", obj.ContentType)
 	setStrHeader(w, "ETag", obj.ETag)
+	setStrHeader(w, "Expires", obj.Expires)
 	setTimeHeader(w, "Last-Modified", obj.LastModified)
 
 	var err error
