@@ -311,6 +311,11 @@ func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetOb
 	setStrHeader(w, "Expires", obj.Expires)
 	setTimeHeader(w, "Last-Modified", obj.LastModified)
 
+	// Adds all custom headers which where used on this object
+	for key, value := range obj.Metadata {
+		setStrHeader(w, key, value)
+	}
+
 	var err error
 	if obj.Body != nil {
 		// io.Copy will set Content-Length
