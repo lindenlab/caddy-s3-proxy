@@ -36,6 +36,9 @@ The Caddyfile directive would look something like this:
 		root   <key prefix>
 		enable_put
 		enable_delete
+		
+        force_path_style
+		enable_delete
 		errors <http status> <S3 key to a custom error page for this http status>
 		errors <S3 key to a default error page>
 		browse [<path to template>]
@@ -51,6 +54,8 @@ The Caddyfile directive would look something like this:
 | root                | string   | no  |    | Set a "prefix" to be added to key |
 | enable_put          | bool     | no  | false   | Allow PUT method to be sent through proxy |
 | enable_delete       | bool     | no  | false   | Allow DELETE method to be sent through proxy |
+| force_path_style    | bool     | no  | false   | Set this to `true` to force S3 request to use path-style addressing |
+| use_accelerate      | bool     | no  | false   | Set this to `true` to enable S3 Accelerate feature |
 | errors              | [int, ] string | no |  | Custom error page or use "pass_through" to write nothing for errors. |
 | browse              | [string] | no |  | Turns on a directory view for partial keys, an optional path to a template can be given |
 

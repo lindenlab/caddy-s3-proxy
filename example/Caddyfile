@@ -15,6 +15,7 @@
                         region "us-west-2"
                         bucket "test-results"
 			endpoint "http://localstack:4566/"
+		    force_path_style
                 }
 	}
 
@@ -30,6 +31,7 @@
 			enable_put
 			enable_delete
 			browse
+		    force_path_style
                 }
 	}
 
@@ -40,6 +42,7 @@
 		bucket "my-bucket"
 		index index.html
 		endpoint "http://localstack:4566/"
+		force_path_style
 	}
 }
 
