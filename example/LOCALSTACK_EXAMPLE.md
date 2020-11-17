@@ -34,6 +34,7 @@ s3proxy {
 	bucket "my-bucket"
 	index index.html
 	endpoint "http://localstack:4566/"
+    force_path_style
 }
 ```
 
@@ -73,6 +74,7 @@ the path is used to create the key in the bucket.
                         region "us-west-2"
                         bucket "test-results"
                         endpoint "http://localstack:4566/"
+		                force_path_style
                 }
         }
 ```
@@ -103,6 +105,7 @@ Here is an example config:
                         endpoint "http://localstack:4566/"
 			enable_put
 			enable_delete
+		                force_path_style
                 }
         }
 ```

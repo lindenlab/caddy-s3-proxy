@@ -24,6 +24,8 @@ func init() {
 //        endpoint <alternative endpoint>
 //        enable_put
 //        enable_delete
+//        force_path_style
+//        use_accelerate
 //        errors [<http code>] [<s3 key to error page>|pass_through]
 //        browse [<template file>]
 //    }
@@ -72,6 +74,10 @@ parseLoop:
 			b.EnablePut = true
 		case "enable_delete":
 			b.EnableDelete = true
+		case "force_path_style":
+			b.S3ForcePathStyle = true
+		case "use_accelerate":
+			b.S3UseAccelerate = true
 		case "browse":
 			b.EnableBrowse = true
 			args := h.RemainingArgs()

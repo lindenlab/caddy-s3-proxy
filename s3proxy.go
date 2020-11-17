@@ -68,6 +68,12 @@ type S3Proxy struct {
 	// S3 key to a default error page or pass through option.
 	DefaultErrorPage string `json:"default_error_page,omitempty"`
 
+	// Set this to `true` to force the request to use path-style addressing.
+	S3ForcePathStyle bool `json:"force_path_style,omitempty"`
+
+	// Set this to `true` to enable S3 Accelerate feature.
+	S3UseAccelerate bool `json:"use_accelerate,omitempty"`
+
 	client      *s3.S3
 	dirTemplate *template.Template
 	log         *zap.Logger
@@ -116,11 +122,6 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 
 	var config aws.Config
 
-	// This is usually required for localstack and other
-	// S3 alternatives, and I don't think there is any downside
-	// when using it on AWS.  So we will always set it.
-	config.S3ForcePathStyle = aws.Bool(true)
-
 	// If Region is not specified NewSession will look for it from an env value AWS_REGION
 	if p.Region != "" {
 		config.Region = aws.String(p.Region)
@@ -128,6 +129,14 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 
 	if p.Endpoint != "" {
 		config.Endpoint = aws.String(p.Endpoint)
+	}
+
+	if p.S3ForcePathStyle {
+		config.S3ForcePathStyle = aws.Bool(p.S3ForcePathStyle)
+	}
+
+	if p.S3UseAccelerate {
+		config.S3UseAccelerate = aws.Bool(p.S3UseAccelerate)
 	}
 
 	sess, err := session.NewSession(&config)
@@ -148,6 +157,8 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 		zap.Bool("enable_delete", p.EnableDelete),
 		zap.String("default_error_page", p.DefaultErrorPage),
 		zap.Bool("enable_browse", p.EnableBrowse),
+		zap.Bool("force_path_style", p.S3ForcePathStyle),
+		zap.Bool("use_accelerate", p.S3UseAccelerate),
 	)
 
 	return nil
