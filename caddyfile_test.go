@@ -147,6 +147,48 @@ func TestParseCaddyfile(t *testing.T) {
 				DefaultErrorPage: "path/to/default_error.html",
 			},
 		},
+		testCase{
+			desc: "hide files",
+			input: `s3proxy {
+				bucket mybucket
+				hide foo.txt _*
+			}`,
+			shouldErr: false,
+			obj: S3Proxy{
+				Bucket: "mybucket",
+				Hide:   []string{"foo.txt", "_*"},
+			},
+		},
+		testCase{
+			desc: "hide files - missing arg",
+			input: `s3proxy {
+				bucket mybucket
+				hide
+			}`,
+			shouldErr: true,
+			errString: "Testfile:3 - Error during parsing: Wrong argument count or unexpected line ending after 'hide'",
+		},
+		testCase{
+			desc: "index test",
+			input: `s3proxy {
+				bucket mybucket
+				index i.htm i.html
+			}`,
+			shouldErr: false,
+			obj: S3Proxy{
+				Bucket:     "mybucket",
+				IndexNames: []string{"i.htm", "i.html"},
+			},
+		},
+		testCase{
+			desc: "index - missing arg",
+			input: `s3proxy {
+				bucket mybucket
+				index
+			}`,
+			shouldErr: true,
+			errString: "Testfile:3 - Error during parsing: Wrong argument count or unexpected line ending after 'index'",
+		},
 	}
 
 	for _, tc := range testCases {
