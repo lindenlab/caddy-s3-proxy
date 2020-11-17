@@ -375,6 +375,14 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		return caddyErr
 	}
 
+	// Certain errors we will not pass through
+	if caddyErr.StatusCode == http.StatusNotModified ||
+		caddyErr.StatusCode == http.StatusPreconditionFailed ||
+		caddyErr.StatusCode == http.StatusRequestedRangeNotSatisfiable {
+		w.WriteHeader(caddyErr.StatusCode)
+		return caddyErr
+	}
+
 	// process errors directive
 	doPassThrough, doS3ErrorPage, s3Key := p.determineErrorsAction(caddyErr.StatusCode)
 	if doPassThrough {
