@@ -113,6 +113,7 @@ A big thank you to folks who have contributed to this project!
   <tr>
     <td align="center"><a href="https://github.com/rayjlinden"><img src="https://avatars0.githubusercontent.com/u/42587610?v=4" width="100px;" alt=""/><br /><sub><b>rayjlinden</b></sub></a></td>
     <td align="center"><a href="https://github.com/gilbsgilbs"><img src="https://avatars2.githubusercontent.com/u/3407667?v=4" width="100px;" alt=""/><br /><sub><b>Gilbert Gilb's</b></sub></a></td>
+    <td align="center"><a href="https://github.com/christoph-kluge"><img src="https://avatars3.githubusercontent.com/u/1446269?v=4" width="100px;" alt=""/><br /><sub><b>Christoph Kluge</b></sub></a></td>
   </tr>
 </table>
 
