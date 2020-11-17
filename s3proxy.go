@@ -187,7 +187,7 @@ func (p S3Proxy) getS3Object(bucket string, path string, headers http.Header) (*
 		}
 	}
 
-	p.log.Info("get from S3",
+	p.log.Debug("get from S3",
 		zap.String("bucket", bucket),
 		zap.String("key", path),
 	)
