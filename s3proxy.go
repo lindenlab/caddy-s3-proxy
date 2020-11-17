@@ -25,12 +25,6 @@ import (
 
 var defaultIndexNames = []string{"index.html", "index.txt"}
 
-var awsErrorCodesMapping = map[string]int{
-	"NotModified":        http.StatusNotModified,
-	"PreconditionFailed": http.StatusPreconditionFailed,
-	"InvalidRange":       http.StatusRequestedRangeNotSatisfiable,
-}
-
 func init() {
 	caddy.RegisterModule(S3Proxy{})
 }
@@ -192,6 +186,8 @@ func (p S3Proxy) getS3Object(bucket string, path string, headers http.Header) (*
 		zap.String("key", path),
 	)
 
+	// TODO: GetObject could return the aws error InternalError, if that happens it is best practice to retry the
+	// the call.  That retry logic should go here...
 	return p.client.GetObject(oi)
 }
 
@@ -225,7 +221,7 @@ func (p S3Proxy) PutHandler(w http.ResponseWriter, r *http.Request, key string) 
 	// TODO: this will not work well for very large files - will run out of memory
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return err
+		return convertToCaddyError(err)
 	}
 
 	oi := s3.PutObjectInput{
@@ -240,7 +236,7 @@ func (p S3Proxy) PutHandler(w http.ResponseWriter, r *http.Request, key string) 
 	}
 	po, err := p.client.PutObject(&oi)
 	if err != nil {
-		return err
+		return convertToCaddyError(err)
 	}
 
 	setStrHeader(w, "ETag", po.ETag)
@@ -261,7 +257,7 @@ func (p S3Proxy) DeleteHandler(w http.ResponseWriter, r *http.Request, key strin
 	}
 	_, err := p.client.DeleteObject(&di)
 	if err != nil {
-		return err
+		return convertToCaddyError(err)
 	}
 
 	return nil
@@ -278,8 +274,7 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key strin
 			zap.String("key", key),
 			zap.String("err", err.Error()),
 		)
-		// TODO: map aws errors to caddy errors
-		return caddyhttp.Error(http.StatusNotFound, nil)
+		return convertToCaddyError(err)
 	}
 
 	pageObj := p.MakePageObj(result)
@@ -291,12 +286,10 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key strin
 		// Generate html response of dir
 		err = pageObj.GenerateHtml(w, p.dirTemplate)
 	}
-
 	if err != nil {
-		err = caddyhttp.Error(http.StatusInternalServerError, err)
+		return convertToCaddyError(err)
 	}
-
-	return err
+	return nil
 }
 
 func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetObjectOutput) error {
@@ -441,7 +434,7 @@ func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath str
 			} else {
 				logIt := true
 				if aerr, ok := err.(awserr.Error); ok {
-					// Getting no duch key here could be rather common
+					// Getting no such key here could be rather common
 					// So only log a warning if we get any other type of error
 					if aerr.Code() != s3.ErrCodeNoSuchKey {
 						logIt = false
@@ -473,42 +466,23 @@ func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath str
 		obj, err = p.getS3Object(p.Bucket, fullPath, r.Header)
 	}
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case s3.ErrCodeNoSuchBucket,
-				s3.ErrCodeNoSuchKey,
-				s3.ErrCodeObjectNotInActiveTierError:
-				// 404
-				p.log.Debug("not found",
-					zap.String("bucket", p.Bucket),
-					zap.String("key", fullPath),
-					zap.String("err", aerr.Error()),
-				)
-				return caddyhttp.Error(http.StatusNotFound, aerr)
-			default:
-				// return 403 maybe?  Why else would it fail?
-				p.log.Error("failed to get object",
-					zap.String("bucket", p.Bucket),
-					zap.String("key", fullPath),
-					zap.String("err", aerr.Error()),
-				)
-
-				if code, ok := awsErrorCodesMapping[aerr.Code()]; ok {
-					return caddyhttp.Error(code, nil)
-				}
-
-				return caddyhttp.Error(http.StatusForbidden, err)
-			}
+		caddyErr := convertToCaddyError(err)
+		if caddyErr.StatusCode == http.StatusNotFound {
+			// Log as debug as this one may be qute common
+			p.log.Debug("not found",
+				zap.String("bucket", p.Bucket),
+				zap.String("key", fullPath),
+				zap.String("err", caddyErr.Error()),
+			)
 		} else {
 			p.log.Error("failed to get object",
 				zap.String("bucket", p.Bucket),
 				zap.String("key", fullPath),
-				zap.String("err", err.Error()),
+				zap.String("err", caddyErr.Error()),
 			)
-
-			// TODO: needs to be caddyError
-			return err
 		}
+
+		return caddyErr
 	}
 
 	return p.writeResponseFromGetObject(w, obj)
