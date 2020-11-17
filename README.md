@@ -36,9 +36,7 @@ The Caddyfile directive would look something like this:
 		root   <key prefix>
 		enable_put
 		enable_delete
-		
-        force_path_style
-		enable_delete
+ 		force_path_style
 		errors <http status> <S3 key to a custom error page for this http status>
 		errors <S3 key to a default error page>
 		browse [<path to template>]
@@ -75,6 +73,12 @@ The methods include (and are looked for in this order):
 
 For much more detail on the various options for setting AWS credentials see here:
 https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html
+
+## Works with localstack!
+
+The s3 proxy works great with localstack for local testing.  Just set the endpoint directive to your localstack
+instance.  You will also want to set the `force_path_style` directive as well since localstack currently does not
+support virtual style addressing.  In fact, all of our examples use localstack - check out the examples directory.
 
 ## Handling errors
 
