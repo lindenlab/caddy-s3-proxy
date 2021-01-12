@@ -18,6 +18,7 @@ func init() {
 //    s3proxy [<matcher>] {
 //        root   <path to prefix S3 key with>
 //        region <aws region>
+//        profile <aws profile>
 //        bucket <s3 bucket name>
 //        index  <files...>
 //        hide   <file patterns...>
@@ -47,6 +48,10 @@ parseLoop:
 			}
 		case "region":
 			if !h.AllArgs(&b.Region) {
+				return nil, h.ArgErr()
+			}
+		case "profile":
+			if !h.AllArgs(&b.Profile) {
 				return nil, h.ArgErr()
 			}
 		case "root":

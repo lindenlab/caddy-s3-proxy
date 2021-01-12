@@ -31,6 +31,7 @@ The Caddyfile directive would look something like this:
 	s3proxy [<matcher>] {
 		bucket <bucket_name>
 		region <region_name>
+                profile <aws profile>
 		index  <list of index file names>
 		endpoint <alternative S3 endpoint>
 		root   <key prefix>
@@ -47,6 +48,7 @@ The Caddyfile directive would look something like this:
 |-----------|:------:|-----------|---------|------|
 | bucket              | string   | yes |                          | S3 bucket name |
 | region              | string   | yes-ish  |  env AWS_REGION          | S3 region - if not give in the Caddyfile then AWS_REGION env var must be set.|
+| profile             | string   | no  |  empty string            | AWS profile if using shared credentials files. |
 | endpoint            | string   | no  |  aws default             | S3 hostname |
 | index               | string[] | no  |  [index.html, index.txt] | Index files to look up for dir path |
 | root                | string   | no  |    | Set a "prefix" to be added to key |
@@ -66,6 +68,7 @@ The methods include (and are looked for in this order):
 1) Environment variables.  I.e. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
 
 2) Shared credentials file.  (Located at ~/.aws/credentials)
+   (You may pass the optional profile directive to select specific credentials.)
 
 3) If your application uses an ECS task definition or RunTask API operation, IAM role for tasks.
 

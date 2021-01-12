@@ -38,6 +38,9 @@ type S3Proxy struct {
 	// The AWS region the bucket is hosted in
 	Region string `json:"region,omitempty"`
 
+	// The AWS profile to use if mulitple profiles are specified in creds
+	Profile string `json:"profile,omitempty"`
+
 	// The name of the S3 bucket
 	Bucket string `json:"bucket,omitempty"`
 
@@ -139,7 +142,11 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 		config.S3UseAccelerate = aws.Bool(p.S3UseAccelerate)
 	}
 
-	sess, err := session.NewSession(&config)
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Profile:           p.Profile,
+		Config:            config,
+		SharedConfigState: session.SharedConfigEnable,
+	})
 	if err != nil {
 		p.log.Error("could not create AWS session",
 			zap.String("error", err.Error()),
@@ -153,6 +160,7 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	p.log.Debug("config values",
 		zap.String("endpoint", p.Endpoint),
 		zap.String("region", p.Region),
+		zap.String("profile", p.Profile),
 		zap.Bool("enable_put", p.EnablePut),
 		zap.Bool("enable_delete", p.EnableDelete),
 		zap.String("default_error_page", p.DefaultErrorPage),
