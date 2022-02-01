@@ -28,7 +28,7 @@ func TestConstructListObjInput(t *testing.T) {
 			expected: s3.ListObjectsV2Input{
 				Bucket:    aws.String("myBucket"),
 				Delimiter: aws.String("/"),
-				Prefix:    aws.String("/mypath"),
+				Prefix:    aws.String("mypath/"),
 			},
 		},
 		testCase{
@@ -39,7 +39,7 @@ func TestConstructListObjInput(t *testing.T) {
 			expected: s3.ListObjectsV2Input{
 				Bucket:    aws.String("myBucket"),
 				Delimiter: aws.String("/"),
-				Prefix:    aws.String("/mypath"),
+				Prefix:    aws.String("mypath/"),
 				MaxKeys:   aws.Int64(20),
 			},
 		},
@@ -51,7 +51,7 @@ func TestConstructListObjInput(t *testing.T) {
 			expected: s3.ListObjectsV2Input{
 				Bucket:            aws.String("myBucket"),
 				Delimiter:         aws.String("/"),
-				Prefix:            aws.String("/mypath"),
+				Prefix:            aws.String("mypath/"),
 				MaxKeys:           aws.Int64(20),
 				ContinuationToken: aws.String("FOO"),
 			},
