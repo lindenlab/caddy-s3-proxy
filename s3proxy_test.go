@@ -321,6 +321,17 @@ func TestProxy(t *testing.T) {
 			expectedResponseText: "my index.html",
 		},
 		{
+			name:   "returns 304 If-None-Match on index",
+			proxy:  S3Proxy{Bucket: bucketName, IndexNames: []string{"index.html"}},
+			method: http.MethodGet,
+			path:   "/inner/",
+			headers: http.Header{
+				"If-None-Match": []string{`"44bacca965de5aef310706cc55c4a7b0"`},
+			},
+			expectedCode:         http.StatusNotModified,
+			expectsEmptyResponse: true,
+		},
+		{
 			name:                 "cannot browse",
 			proxy:                S3Proxy{Bucket: bucketName},
 			method:               http.MethodGet,

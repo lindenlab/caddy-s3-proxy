@@ -446,7 +446,8 @@ func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath str
 		for _, indexPage := range p.IndexNames {
 			indexPath := path.Join(fullPath, indexPage)
 			obj, err = p.getS3Object(p.Bucket, indexPath, r.Header)
-			if err == nil {
+			caddyErr := convertToCaddyError(err)
+			if err == nil || caddyErr.StatusCode == 304 {
 				// We found an index!
 				isDir = false
 				break
@@ -487,7 +488,7 @@ func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath str
 	if err != nil {
 		caddyErr := convertToCaddyError(err)
 		if caddyErr.StatusCode == http.StatusNotFound {
-			// Log as debug as this one may be qute common
+			// Log as debug as this one may be quite common
 			p.log.Debug("not found",
 				zap.String("bucket", p.Bucket),
 				zap.String("key", fullPath),
