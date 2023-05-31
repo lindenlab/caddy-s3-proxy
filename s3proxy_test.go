@@ -19,7 +19,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/caddyserver/caddy/v2"
+	caddy "github.com/caddyserver/caddy/v2"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
