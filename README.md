@@ -15,7 +15,7 @@ is not configured on your bucket.
 With caddy 2 you can use [xcaddy](https://github.com/caddyserver/xcaddy) to build a version of caddy
 with this plugin installed.  To install xcaddy do:
 ```
-go get -u github.com/caddyserver/xcaddy/cmd/xcaddy
+go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 ```
 
 This repo has a Makefile to make it easier to build a new version of caddy with this plugin.  Just type:
