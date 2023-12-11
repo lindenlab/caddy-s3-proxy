@@ -1,0 +1,31 @@
+# DO NOT EDIT
+#
+# This wil will be auto-updated by checkdeps to match the version in
+#    extraction-makeworld/configs/checkdeps/standard-lint.yml
+#
+#  If you NEED to have custom lint rules for a paticular repository you can change the name
+#  of this file make your updates.  Then change the lint target in the Makefile to reference your
+#  custom file.
+#
+#  If we need to update this config to add new linters, get rid of deprecated linters, etc.  You can just make
+#  the change in makeworld and then it will propogate to all repos using this file as developers run 
+#  checkdeps --fix in those repos.
+
+run:
+  timeout: 5m
+linters:
+  disable-all: true
+  enable:
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+    - govet
+    - errcheck
+    - gosimple
+    - ineffassign
+    - typecheck
+    - gosec
+linters-settings:
+  goimports:
+    local-prefixes: github.com/lindenlab

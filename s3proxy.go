@@ -332,6 +332,7 @@ func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetOb
 	if obj.Body != nil {
 		// io.Copy will set Content-Length
 		w.Header().Del("Content-Length")
+		w.WriteHeader(http.StatusOK)
 		_, err = io.Copy(w, obj.Body)
 	}
 
