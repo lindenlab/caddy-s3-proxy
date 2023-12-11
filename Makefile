@@ -1,6 +1,8 @@
 VERSION := $(shell cat Version)
 COVER_TARGET ?= 30
 
+export GO111MODULE=on
+
 # Set for running tests against localstack
 export AWS_SECRET_ACCESS_KEY=dummy
 export AWS_ACCESS_KEY_ID=dummy
