@@ -17,81 +17,81 @@ type testCase struct {
 
 func TestParseCaddyfile(t *testing.T) {
 	testCases := []testCase{
-		testCase{
+		{
 			desc: "bad sub directive",
 			input: `s3proxy {
 				foo
 			}`,
 			shouldErr: true,
-			errString: "Testfile:2 - Error during parsing: foo not a valid s3proxy option",
+			errString: "foo not a valid s3proxy option, at Testfile:2",
 		},
-		testCase{
+		{
 			desc: "bucket bad # args",
 			input: `s3proxy {
 			bucket
 			}`,
 			shouldErr: true,
-			errString: "Testfile:2 - Error during parsing: Wrong argument count or unexpected line ending after 'bucket'",
+			errString: "wrong argument count or unexpected line ending after 'bucket', at Testfile:2",
 		},
-		testCase{
+		{
 			desc: "bucket empty string",
 			input: `s3proxy {
 				bucket ""
 			}`,
 			shouldErr: true,
-			errString: "Testfile:2 - Error during parsing: bucket must be set and not empty",
+			errString: "bucket must be set and not empty, at Testfile:2",
 		},
-		testCase{
+		{
 			desc: "bucket missing",
 			input: `s3proxy {
 				region foo
 			}`,
 			shouldErr: true,
-			errString: "Testfile:3 - Error during parsing: bucket must be set and not empty",
+			errString: "bucket must be set and not empty, at Testfile:3",
 		},
-		testCase{
+		{
 			desc: "endpoint bad # args",
 			input: `s3proxy {
 				endpoint
 			}`,
 			shouldErr: true,
-			errString: "Testfile:2 - Error during parsing: Wrong argument count or unexpected line ending after 'endpoint'",
+			errString: "wrong argument count or unexpected line ending after 'endpoint', at Testfile:2",
 		},
-		testCase{
+		{
 			desc: "region bad # args",
 			input: `s3proxy {
 				region one two
 			}`,
 			shouldErr: true,
-			errString: "Testfile:2 - Error during parsing: Wrong argument count or unexpected line ending after 'one'",
+			errString: "wrong argument count or unexpected line ending after 'one', at Testfile:2",
 		},
-		testCase{
+		{
 			desc: "root bad # args",
 			input: `s3proxy {
 				root one two
 			}`,
 			shouldErr: true,
-			errString: "Testfile:2 - Error during parsing: Wrong argument count or unexpected line ending after 'one'",
+			errString: "wrong argument count or unexpected line ending after 'one', at Testfile:2",
 		},
-		testCase{
+		{
 			desc: "errors on invalid HTTP status for errors",
 			input: `s3proxy {
 				bucket mybucket
 				errors invalid "path/to/404.html"
 			}`,
 			shouldErr: true,
-			errString: "Testfile:3 - Error during parsing: 'invalid' is not a valid HTTP status code",
+			errString: "'invalid' is not a valid HTTP status code, at Testfile:3",
 		},
-		testCase{
+		{
 			desc: "errors on too many arguments for errors",
 			input: `s3proxy {
 				bucket mybucket
 				errors 403 "path/to/404.html" "what's this?"
 			}`,
 			shouldErr: true,
-			errString: "Testfile:3 - Error during parsing: Wrong argument count or unexpected line ending after 'what's this?'",
+			errString: "wrong argument count or unexpected line ending after 'what's this?', at Testfile:3",
 		},
-		testCase{
+		{
 			desc: "endpoint gets set",
 			input: `s3proxy {
 				bucket mybucket
@@ -105,7 +105,7 @@ func TestParseCaddyfile(t *testing.T) {
 				Region:   "myregion",
 			},
 		},
-		testCase{
+		{
 			desc: "enable pu",
 			input: `s3proxy {
 				bucket mybucket
@@ -117,7 +117,7 @@ func TestParseCaddyfile(t *testing.T) {
 				EnablePut: true,
 			},
 		},
-		testCase{
+		{
 			desc: "enable delete",
 			input: `s3proxy {
 				bucket mybucket
@@ -129,7 +129,7 @@ func TestParseCaddyfile(t *testing.T) {
 				EnableDelete: true,
 			},
 		},
-		testCase{
+		{
 			desc: "enable error pages",
 			input: `s3proxy {
 				bucket mybucket
@@ -147,7 +147,7 @@ func TestParseCaddyfile(t *testing.T) {
 				DefaultErrorPage: "path/to/default_error.html",
 			},
 		},
-		testCase{
+		{
 			desc: "hide files",
 			input: `s3proxy {
 				bucket mybucket
@@ -159,16 +159,16 @@ func TestParseCaddyfile(t *testing.T) {
 				Hide:   []string{"foo.txt", "_*"},
 			},
 		},
-		testCase{
+		{
 			desc: "hide files - missing arg",
 			input: `s3proxy {
 				bucket mybucket
 				hide
 			}`,
 			shouldErr: true,
-			errString: "Testfile:3 - Error during parsing: Wrong argument count or unexpected line ending after 'hide'",
+			errString: "wrong argument count or unexpected line ending after 'hide', at Testfile:3",
 		},
-		testCase{
+		{
 			desc: "index test",
 			input: `s3proxy {
 				bucket mybucket
@@ -180,14 +180,14 @@ func TestParseCaddyfile(t *testing.T) {
 				IndexNames: []string{"i.htm", "i.html"},
 			},
 		},
-		testCase{
+		{
 			desc: "index - missing arg",
 			input: `s3proxy {
 				bucket mybucket
 				index
 			}`,
 			shouldErr: true,
-			errString: "Testfile:3 - Error during parsing: Wrong argument count or unexpected line ending after 'index'",
+			errString: "wrong argument count or unexpected line ending after 'index', at Testfile:3",
 		},
 	}
 

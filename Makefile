@@ -1,6 +1,7 @@
-export GO111MODULE=on
 VERSION := $(shell cat Version)
 COVER_TARGET ?= 30
+
+export GO111MODULE=on
 
 # Set for running tests against localstack
 export AWS_SECRET_ACCESS_KEY=dummy
@@ -32,7 +33,7 @@ cover:  ## Generate test coverage results
 
 .PHONY: lint
 lint:  ## Run golint on source base
-	@golangci-lint run ./...
+	@golangci-lint run --config .standard-lint.yml ./...
 
 .PHONY: localstack
 localstack:  ## Launch localstack to run tests against
@@ -51,6 +52,7 @@ awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 .PHONY: clean
 clean:  ## Delete any generated files
 	@rm -f caddy
+	@rm -f cover.profile cover.html cover.func
 
 .PHONY: version
 version:  ## Show the version the Makefile will build

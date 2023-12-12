@@ -34,42 +34,42 @@ type jTestCase struct {
 
 func TestJoinPath(t *testing.T) {
 	testCases := []jTestCase{
-		jTestCase{
+		{
 			root:     "",
 			path:     "/foo",
 			expected: "/foo",
 		},
-		jTestCase{
+		{
 			root:     "",
 			path:     "/",
 			expected: "/",
 		},
-		jTestCase{
+		{
 			root:     "/",
 			path:     "/",
 			expected: "/",
 		},
-		jTestCase{
+		{
 			root:     "/",
 			path:     "/foo",
 			expected: "/foo",
 		},
-		jTestCase{
+		{
 			root:     "/cat",
 			path:     "/dog",
 			expected: "/cat/dog",
 		},
-		jTestCase{
+		{
 			root:     "/cat/",
 			path:     "/dog",
 			expected: "/cat/dog",
 		},
-		jTestCase{
+		{
 			root:     "/cat/",
 			path:     "/dog/",
 			expected: "/cat/dog/",
 		},
-		jTestCase{
+		{
 			root:     "",
 			path:     "/dog/",
 			expected: "/dog/",
@@ -179,6 +179,7 @@ func newS3Client(t *testing.T) *s3.S3 {
 }
 
 func setupTestBucket(t *testing.T, client *s3.S3) string {
+	//nolint GoSec
 	bucketName := fmt.Sprintf(
 		"caddy-s3-proxy-testdata-%d-%d",
 		time.Now().UnixNano(),

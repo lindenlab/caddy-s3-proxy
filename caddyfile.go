@@ -15,22 +15,21 @@ func init() {
 // parseCaddyfile parses the s3proxy directive. It enables the proxying
 // requests to S3 and configures it with this syntax:
 //
-//    s3proxy [<matcher>] {
-//        root   <path to prefix S3 key with>
-//        region <aws region>
-//        profile <aws profile>
-//        bucket <s3 bucket name>
-//        index  <files...>
-//        hide   <file patterns...>
-//        endpoint <alternative endpoint>
-//        enable_put
-//        enable_delete
-//        force_path_style
-//        use_accelerate
-//        errors [<http code>] [<s3 key to error page>|pass_through]
-//        browse [<template file>]
-//    }
-//
+//	s3proxy [<matcher>] {
+//	    root   <path to prefix S3 key with>
+//	    region <aws region>
+//	    profile <aws profile>
+//	    bucket <s3 bucket name>
+//	    index  <files...>
+//	    hide   <file patterns...>
+//	    endpoint <alternative endpoint>
+//	    enable_put
+//	    enable_delete
+//	    force_path_style
+//	    use_accelerate
+//	    errors [<http code>] [<s3 key to error page>|pass_through]
+//	    browse [<template file>]
+//	}
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
 	return parseCaddyfileWithDispenser(h.Dispenser)
 }

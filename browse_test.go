@@ -21,7 +21,7 @@ func TestConstructListObjInput(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		testCase{
+		{
 			name:   "no query options",
 			bucket: "myBucket",
 			key:    "/mypath/",
@@ -31,7 +31,7 @@ func TestConstructListObjInput(t *testing.T) {
 				Prefix:    aws.String("mypath/"),
 			},
 		},
-		testCase{
+		{
 			name:        "max option",
 			bucket:      "myBucket",
 			key:         "/mypath/",
@@ -43,7 +43,7 @@ func TestConstructListObjInput(t *testing.T) {
 				MaxKeys:   aws.Int64(20),
 			},
 		},
-		testCase{
+		{
 			name:        "max with next",
 			bucket:      "myBucket",
 			key:         "/mypath/",
@@ -78,15 +78,15 @@ func TestMakePageObj(t *testing.T) {
 		NextContinuationToken: aws.String("next_token"),
 		MaxKeys:               aws.Int64(20),
 		CommonPrefixes: []*s3.CommonPrefix{
-			&s3.CommonPrefix{
+			{
 				Prefix: aws.String("/mydir"),
 			},
-			&s3.CommonPrefix{
+			{
 				Prefix: aws.String("/otherdir"),
 			},
 		},
 		Contents: []*s3.Object{
-			&s3.Object{
+			{
 				Key:          aws.String("/path/to/myobj"),
 				Size:         aws.Int64(1024),
 				LastModified: aws.Time(time.Date(1845, time.November, 10, 23, 0, 0, 0, time.UTC)),
@@ -99,17 +99,17 @@ func TestMakePageObj(t *testing.T) {
 		Count:    20,
 		MoreLink: "?max=20&next=next_token",
 		Items: []Item{
-			Item{
+			{
 				Url:   "./mydir/",
 				IsDir: true,
 				Name:  "mydir",
 			},
-			Item{
+			{
 				Url:   "./otherdir/",
 				IsDir: true,
 				Name:  "otherdir",
 			},
-			Item{
+			{
 				Url:          "./myobj",
 				Key:          "/path/to/myobj",
 				IsDir:        false,
