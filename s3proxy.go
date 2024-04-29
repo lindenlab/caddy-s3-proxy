@@ -189,13 +189,13 @@ func (p S3Proxy) getS3Object(bucket string, path string, headers http.Header) (*
 	}
 	if ifModifiedSince := headers.Get("If-Modified-Since"); ifModifiedSince != "" {
 		t, err := time.Parse(http.TimeFormat, ifModifiedSince)
-		if err == nil {
+		if err == nil && path != "/" {
 			oi = oi.SetIfModifiedSince(t)
 		}
 	}
 	if ifUnmodifiedSince := headers.Get("If-Unmodified-Since"); ifUnmodifiedSince != "" {
 		t, err := time.Parse(http.TimeFormat, ifUnmodifiedSince)
-		if err == nil {
+		if err == nil && path != "/" {
 			oi = oi.SetIfUnmodifiedSince(t)
 		}
 	}
