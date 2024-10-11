@@ -82,6 +82,79 @@ type S3Proxy struct {
 	log         *zap.Logger
 }
 
+type resolved_proxy struct {
+	// Omitted fields are resovled at Provision time
+	Root string
+	// Region string // Used in S3 client
+	// Profile string // Used in S3 client
+	Bucket string
+	// Endpoint string // Used in S3 client
+	IndexNames   []string
+	Hide         []string
+	EnablePut    bool
+	EnableDelete bool
+	EnableBrowse bool // Resolved at provision time
+	// BrowseTemplate string  // Resolved at provision time, used to build dirTemplate
+	ErrorPages       map[int]string
+	DefaultErrorPage string
+	// S3ForcePathStyle bool // Used in S3 client
+	// S3UseAccelerate bool // Used in S3 client
+
+	client      *s3.S3
+	dirTemplate *template.Template
+	log         *zap.Logger
+}
+
+// From https://stackoverflow.com/a/50025091
+// func map_list[T, V any](ts []T, fn func(T) V) []V {
+func map_list(ts []string, fn func(string) string) []string {
+	result := make([]string, len(ts))
+	for i, t := range ts {
+		result[i] = fn(t)
+	}
+	return result
+}
+
+// func map_map[K, I, V any](ts map[K]I, fn func(I) V) map[K]V {
+func map_map(ts map[int]string, fn func(string) string) map[int]string {
+	result := make(map[int]string, len(ts))
+	for k, v := range ts {
+		result[k] = fn(v)
+	}
+	return result
+}
+
+// Resolve config--substitute variables and realize all values
+func (p *S3Proxy) ResolveValues(r *http.Request) (resolved_proxy, error) {
+	// TODO: Do we want to use ReplaceAll or ReplaceOrErr?
+	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
+	mapfunc := func(v string) string { return repl.ReplaceAll(v, "") }
+	return resolved_proxy{
+		// The assumption is that any of these values could have variables.
+		// Not necessarily from HTTP, but from other modules or advanced
+		// configs
+		Root: repl.ReplaceAll(p.Root, ""),
+		// Region: repl.ReplaceAll(p.Region, ""),
+		// Profile: repl.ReplaceAll(p.Profile, ""),
+		Bucket: repl.ReplaceAll(p.Bucket, ""),
+		// Endpoint: repl.ReplaceAll(p.Endpoint, ""),
+		IndexNames:   map_list(p.IndexNames, mapfunc),
+		Hide:         map_list(p.Hide, mapfunc),
+		EnablePut:    p.EnablePut,
+		EnableDelete: p.EnableDelete,
+		EnableBrowse: p.EnableBrowse,
+		// BrowseTemplate: p.BrowseTemplate,
+		ErrorPages:       map_map(p.ErrorPages, mapfunc),
+		DefaultErrorPage: repl.ReplaceAll(p.DefaultErrorPage, ""),
+		// S3ForcePathStyle: p.S3ForcePathStyle,
+		// S3UseAccelerate: p.S3UseAccelerate,
+
+		client:      p.client,
+		dirTemplate: p.dirTemplate,
+		log:         p.log,
+	}, nil
+}
+
 // CaddyModule returns the Caddy module information.
 func (S3Proxy) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
@@ -172,7 +245,7 @@ func (p *S3Proxy) Provision(ctx caddy.Context) (err error) {
 	return nil
 }
 
-func (p S3Proxy) getS3Object(bucket string, path string, headers http.Header) (*s3.GetObjectOutput, error) {
+func (p resolved_proxy) getS3Object(bucket string, path string, headers http.Header) (*s3.GetObjectOutput, error) {
 	oi := &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(path),
@@ -228,7 +301,7 @@ func makeAwsString(str string) *string {
 	return aws.String(str)
 }
 
-func (p S3Proxy) PutHandler(w http.ResponseWriter, r *http.Request, key string) error {
+func (p resolved_proxy) PutHandler(w http.ResponseWriter, r *http.Request, key string) error {
 	isDir := strings.HasSuffix(key, "/")
 	if isDir || !p.EnablePut {
 		err := errors.New("method not allowed")
@@ -263,7 +336,7 @@ func (p S3Proxy) PutHandler(w http.ResponseWriter, r *http.Request, key string) 
 	return nil
 }
 
-func (p S3Proxy) DeleteHandler(w http.ResponseWriter, r *http.Request, key string) error {
+func (p resolved_proxy) DeleteHandler(w http.ResponseWriter, r *http.Request, key string) error {
 	isDir := strings.HasSuffix(key, "/")
 	if isDir || !p.EnableDelete {
 		err := errors.New("method not allowed")
@@ -282,7 +355,7 @@ func (p S3Proxy) DeleteHandler(w http.ResponseWriter, r *http.Request, key strin
 	return nil
 }
 
-func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key string) error {
+func (p resolved_proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key string) error {
 
 	input := p.ConstructListObjInput(r, key)
 
@@ -311,7 +384,7 @@ func (p S3Proxy) BrowseHandler(w http.ResponseWriter, r *http.Request, key strin
 	return nil
 }
 
-func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetObjectOutput) error {
+func (p resolved_proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetObjectOutput) error {
 	// Copy headers from AWS response to our response
 	setStrHeader(w, "Cache-Control", obj.CacheControl)
 	setStrHeader(w, "Content-Disposition", obj.ContentDisposition)
@@ -338,7 +411,7 @@ func (p S3Proxy) writeResponseFromGetObject(w http.ResponseWriter, obj *s3.GetOb
 	return err
 }
 
-func (p S3Proxy) serveErrorPage(w http.ResponseWriter, s3Key string) error {
+func (p resolved_proxy) serveErrorPage(w http.ResponseWriter, s3Key string) error {
 	obj, err := p.getS3Object(p.Bucket, s3Key, nil)
 	if err != nil {
 		return err
@@ -353,18 +426,21 @@ func (p S3Proxy) serveErrorPage(w http.ResponseWriter, s3Key string) error {
 
 // ServeHTTP implements the main entry point for a request for the caddyhttp.Handler interface.
 func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
+	resolved, err := p.ResolveValues(r)
+	if err != nil {
+		return err
+	}
 
-	fullPath := joinPath(repl.ReplaceAll(p.Root, ""), r.URL.Path)
+	fullPath := joinPath(resolved.Root, r.URL.Path)
 
-	var err error
+	// var err error
 	switch r.Method {
 	case http.MethodGet:
-		err = p.GetHandler(w, r, fullPath)
+		err = resolved.GetHandler(w, r, fullPath)
 	case http.MethodPut:
-		err = p.PutHandler(w, r, fullPath)
+		err = resolved.PutHandler(w, r, fullPath)
 	case http.MethodDelete:
-		err = p.DeleteHandler(w, r, fullPath)
+		err = resolved.DeleteHandler(w, r, fullPath)
 	default:
 		err = caddyhttp.Error(http.StatusMethodNotAllowed, errors.New("method not allowed"))
 	}
@@ -396,7 +472,7 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	}
 
 	// process errors directive
-	doPassThrough, doS3ErrorPage, s3Key := p.determineErrorsAction(caddyErr.StatusCode)
+	doPassThrough, doS3ErrorPage, s3Key := resolved.determineErrorsAction(caddyErr.StatusCode)
 	if doPassThrough {
 		return next.ServeHTTP(w, r)
 	}
@@ -405,10 +481,10 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 		w.WriteHeader(caddyErr.StatusCode)
 	}
 	if doS3ErrorPage {
-		if err := p.serveErrorPage(w, s3Key); err != nil {
+		if err := resolved.serveErrorPage(w, s3Key); err != nil {
 			// Just log the error as we don't want to swallow the parent error.
-			p.log.Error("error serving error page",
-				zap.String("bucket", p.Bucket),
+			resolved.log.Error("error serving error page",
+				zap.String("bucket", resolved.Bucket),
 				zap.String("key", s3Key),
 				zap.String("err", err.Error()),
 			)
@@ -417,7 +493,7 @@ func (p S3Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhtt
 	return caddyErr
 }
 
-func (p S3Proxy) determineErrorsAction(statusCode int) (bool, bool, string) {
+func (p resolved_proxy) determineErrorsAction(statusCode int) (bool, bool, string) {
 	var s3Key string
 	if errorPageS3Key, hasErrorPageForCode := p.ErrorPages[statusCode]; hasErrorPageForCode {
 		s3Key = errorPageS3Key
@@ -432,7 +508,7 @@ func (p S3Proxy) determineErrorsAction(statusCode int) (bool, bool, string) {
 	return false, s3Key != "", s3Key
 }
 
-func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath string) error {
+func (p resolved_proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath string) error {
 	// If file is hidden - return 404
 	if fileHidden(fullPath, p.Hide) {
 		return caddyhttp.Error(http.StatusNotFound, nil)

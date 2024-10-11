@@ -61,7 +61,7 @@ func TestConstructListObjInput(t *testing.T) {
 		r := http.Request{}
 		u, _ := url.Parse(tc.queryString)
 		r.URL = u
-		p := S3Proxy{
+		p := resolved_proxy{
 			Bucket: tc.bucket,
 		}
 		result := p.ConstructListObjInput(&r, tc.key)
@@ -72,7 +72,7 @@ func TestConstructListObjInput(t *testing.T) {
 }
 
 func TestMakePageObj(t *testing.T) {
-	p := S3Proxy{}
+	p := resolved_proxy{}
 	listOutput := s3.ListObjectsV2Output{
 		KeyCount:              aws.Int64(20),
 		NextContinuationToken: aws.String("next_token"),

@@ -53,7 +53,7 @@ func (po PageObj) GenerateJson(w http.ResponseWriter) error {
 	return err
 }
 
-func (p S3Proxy) ConstructListObjInput(r *http.Request, key string) s3.ListObjectsV2Input {
+func (p resolved_proxy) ConstructListObjInput(r *http.Request, key string) s3.ListObjectsV2Input {
 	// We need to strip the first '/' from the key to make it a valid prefix
 	prefix := strings.TrimPrefix(key, "/")
 
@@ -95,7 +95,7 @@ func (po PageObj) GenerateHtml(w http.ResponseWriter, template *template.Templat
 	return err
 }
 
-func (p S3Proxy) MakePageObj(result *s3.ListObjectsV2Output) PageObj {
+func (p resolved_proxy) MakePageObj(result *s3.ListObjectsV2Output) PageObj {
 	po := PageObj{}
 	po.Count = *result.KeyCount
 	if result.NextContinuationToken != nil {
