@@ -504,6 +504,9 @@ func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath str
 
 		return caddyErr
 	}
+	if rg := r.Header.Get("Range"); rg != "" {
+		w.WriteHeader(http.StatusPartialContent)
+	}
 
 	return p.writeResponseFromGetObject(w, obj)
 }
