@@ -447,26 +447,33 @@ func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath str
 			indexPath := path.Join(fullPath, indexPage)
 			obj, err = p.getS3Object(p.Bucket, indexPath, r.Header)
 			caddyErr := convertToCaddyError(err)
-			if err == nil || caddyErr.StatusCode == 304 {
+			if caddyErr.StatusCode == 304 {
+				// The client's cached copy of the index is still current —
+				// return 304 directly. Falling through would leave obj == nil
+				// and re-fetch the *directory* key below, turning a valid 304
+				// into a 404. (#56/#57 added the 304 check here but still fell
+				// through, only converting the earlier 403 symptom into a 404.)
+				return caddyErr
+			}
+			if err == nil {
 				// We found an index!
 				isDir = false
 				break
-			} else {
-				logIt := true
-				if aerr, ok := err.(awserr.Error); ok {
-					// Getting no such key here could be rather common
-					// So only log a warning if we get any other type of error
-					if aerr.Code() != s3.ErrCodeNoSuchKey {
-						logIt = false
-					}
+			}
+			logIt := true
+			if aerr, ok := err.(awserr.Error); ok {
+				// Getting no such key here could be rather common
+				// So only log a warning if we get any other type of error
+				if aerr.Code() != s3.ErrCodeNoSuchKey {
+					logIt = false
 				}
-				if logIt {
-					p.log.Warn("error when looking for index",
-						zap.String("bucket", p.Bucket),
-						zap.String("key", fullPath),
-						zap.String("err", err.Error()),
-					)
-				}
+			}
+			if logIt {
+				p.log.Warn("error when looking for index",
+					zap.String("bucket", p.Bucket),
+					zap.String("key", fullPath),
+					zap.String("err", err.Error()),
+				)
 			}
 		}
 	}
@@ -487,14 +494,24 @@ func (p S3Proxy) GetHandler(w http.ResponseWriter, r *http.Request, fullPath str
 	}
 	if err != nil {
 		caddyErr := convertToCaddyError(err)
-		if caddyErr.StatusCode == http.StatusNotFound {
+		switch caddyErr.StatusCode {
+		case http.StatusNotFound:
 			// Log as debug as this one may be quite common
 			p.log.Debug("not found",
 				zap.String("bucket", p.Bucket),
 				zap.String("key", fullPath),
 				zap.String("err", caddyErr.Error()),
 			)
-		} else {
+		case http.StatusNotModified, http.StatusPreconditionFailed, http.StatusRequestedRangeNotSatisfiable:
+			// Conditional/range outcomes (If-None-Match, If-Modified-Since,
+			// Range) are normal client-cache behaviour, not errors. ServeHTTP
+			// passes these status codes straight through to the client.
+			p.log.Debug("conditional request outcome",
+				zap.Int("status", caddyErr.StatusCode),
+				zap.String("bucket", p.Bucket),
+				zap.String("key", fullPath),
+			)
+		default:
 			p.log.Error("failed to get object",
 				zap.String("bucket", p.Bucket),
 				zap.String("key", fullPath),
